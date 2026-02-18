@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@haya/core": "workspace:*",
-    "@haya/plugin-sdk": "workspace:*"
+    "@haya/plugin-sdk": "workspace:*",
+    "@slack/bolt": "^4",
+    "@slack/web-api": "^7"
   }
 }

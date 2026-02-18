@@ -86,6 +86,51 @@ export class CronService {
     return this.timers.size;
   }
 
+  /**
+   * Add a job dynamically at runtime. If the service is running
+   * and the job is enabled, it will be scheduled immediately.
+   * Returns the created job entry.
+   */
+  async addJob(params: {
+    name: string;
+    schedule: string;
+    action: string;
+    enabled?: boolean;
+  }): Promise<CronJobEntry> {
+    const entry = this.store.add(params);
+    if (this.running && entry.enabled) {
+      this.scheduleJob(entry);
+    }
+    await this.store.save();
+    log.info(`Added job "${entry.name}" (${entry.schedule})`);
+    return entry;
+  }
+
+  /**
+   * Remove a job by ID. Stops its timer if running.
+   * Returns true if the job was found and removed.
+   */
+  async removeJob(jobId: string): Promise<boolean> {
+    const timer = this.timers.get(jobId);
+    if (timer) {
+      timer.stop();
+      this.timers.delete(jobId);
+    }
+    const removed = this.store.remove(jobId);
+    if (removed) {
+      await this.store.save();
+      log.info(`Removed job "${jobId}"`);
+    }
+    return removed;
+  }
+
+  /**
+   * List all jobs.
+   */
+  listJobs(): CronJobEntry[] {
+    return this.store.list();
+  }
+
   private scheduleJob(job: CronJobEntry): void {
     try {
       const timer = new Cron(job.schedule, async () => {

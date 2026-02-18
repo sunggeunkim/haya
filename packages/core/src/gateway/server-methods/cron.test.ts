@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { createCronListHandler, createCronStatusHandler } from "./cron.js";
+import {
+  createCronListHandler,
+  createCronStatusHandler,
+  createCronAddHandler,
+  createCronRemoveHandler,
+} from "./cron.js";
 import { CronService } from "../../cron/service.js";
 import { CronStore } from "../../cron/store.js";
 import { join } from "node:path";
@@ -80,6 +85,70 @@ describe("cron server methods", () => {
 
       expect(result.running).toBe(false);
       expect(result.activeTimers).toBe(0);
+    });
+  });
+
+  describe("createCronAddHandler", () => {
+    it("adds a new cron job", async () => {
+      const handler = createCronAddHandler(service);
+      const result = (await handler(
+        {
+          name: "new-job",
+          schedule: "*/10 * * * *",
+          action: "new-action",
+        },
+        "client-1",
+      )) as { job: { name: string; schedule: string } };
+
+      expect(result.job.name).toBe("new-job");
+      expect(result.job.schedule).toBe("*/10 * * * *");
+      expect(service.listJobs()).toHaveLength(2);
+    });
+
+    it("throws on invalid params (missing name)", async () => {
+      const handler = createCronAddHandler(service);
+      await expect(
+        handler({ schedule: "* * * * *", action: "a" }, "client-1"),
+      ).rejects.toThrow();
+    });
+
+    it("throws on empty name", async () => {
+      const handler = createCronAddHandler(service);
+      await expect(
+        handler(
+          { name: "", schedule: "* * * * *", action: "a" },
+          "client-1",
+        ),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe("createCronRemoveHandler", () => {
+    it("removes a cron job by id", async () => {
+      const job = store.list()[0];
+      const handler = createCronRemoveHandler(service);
+      const result = (await handler(
+        { jobId: job.id },
+        "client-1",
+      )) as { removed: boolean };
+
+      expect(result.removed).toBe(true);
+      expect(service.listJobs()).toHaveLength(0);
+    });
+
+    it("returns false for non-existent job id", async () => {
+      const handler = createCronRemoveHandler(service);
+      const result = (await handler(
+        { jobId: "nonexistent" },
+        "client-1",
+      )) as { removed: boolean };
+
+      expect(result.removed).toBe(false);
+    });
+
+    it("throws on invalid params (missing jobId)", async () => {
+      const handler = createCronRemoveHandler(service);
+      await expect(handler({}, "client-1")).rejects.toThrow();
     });
   });
 });
