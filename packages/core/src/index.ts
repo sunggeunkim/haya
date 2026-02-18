@@ -173,3 +173,32 @@ export {
   validatePluginPermissions,
 } from "./security/plugin-sandbox.js";
 export type { SandboxedWorker, SandboxOptions } from "./security/plugin-sandbox.js";
+
+// Channels
+export { ChannelRegistry } from "./channels/registry.js";
+export { ChannelDock } from "./channels/dock.js";
+export type { ChannelDockStatus } from "./channels/dock.js";
+export type {
+  ChannelPlugin,
+  ChannelStatus,
+  ChannelInboundMessage,
+  ChannelOutboundMessage,
+  ChannelMessageHandler,
+} from "./channels/types.js";
+
+// Cron
+export { CronStore } from "./cron/store.js";
+export type { CronJobEntry } from "./cron/store.js";
+export { CronService } from "./cron/service.js";
+export type { CronActionHandler } from "./cron/service.js";
+
+// Gateway server methods — channels & cron
+export {
+  createChannelsListHandler,
+  createChannelsStartHandler,
+  createChannelsStopHandler,
+} from "./gateway/server-methods/channels.js";
+export {
+  createCronListHandler,
+  createCronStatusHandler,
+} from "./gateway/server-methods/cron.js";
