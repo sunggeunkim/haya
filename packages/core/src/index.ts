@@ -38,3 +38,47 @@ export {
   NotFoundError,
   RateLimitError,
 } from "./infra/errors.js";
+
+// Gateway
+export { createGateway } from "./gateway/server.js";
+export type { GatewayInstance, GatewayOptions } from "./gateway/server.js";
+export { createGatewayHttpServer } from "./gateway/server-http.js";
+export { createGatewayWsServer } from "./gateway/server-ws.js";
+export type {
+  GatewayWsServer,
+  MethodHandler,
+  WsServerOptions,
+} from "./gateway/server-ws.js";
+export {
+  isLoopbackAddress,
+  resolveClientIp,
+  resolveBindHost,
+  isTrustedProxy,
+  ipMatchesCIDR,
+} from "./gateway/net.js";
+export {
+  authorizeRequest,
+  extractBearerToken,
+  extractCredentials,
+} from "./gateway/auth.js";
+export type { AuthConfig, AuthMode, AuthResult } from "./gateway/auth.js";
+export {
+  createAuthRateLimiter,
+} from "./gateway/auth-rate-limit.js";
+export type {
+  AuthRateLimiter,
+  RateLimitCheckResult,
+  RateLimitConfig,
+} from "./gateway/auth-rate-limit.js";
+export { generateCspNonce, buildCspHeader } from "./gateway/csp.js";
+export {
+  generateSelfSignedCert,
+  isCertValid,
+  ensureTlsCerts,
+  buildTlsOptions,
+} from "./gateway/tls.js";
+export type { TlsCertPaths } from "./gateway/tls.js";
+export { parseRequest, buildResponse, buildErrorResponse, buildEvent, serializeFrame } from "./gateway/protocol/frames.js";
+export { GatewayRequestSchema, GatewayResponseSchema, GatewayEventSchema, GatewayFrameSchema } from "./gateway/protocol/schema.js";
+export { ErrorCodes } from "./gateway/protocol/types.js";
+export type { GatewayRequest, GatewayResponse, GatewayError, GatewayEvent } from "./gateway/protocol/types.js";
