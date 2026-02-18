@@ -32,6 +32,10 @@ FROM node:22-bookworm-slim AS production
 # Enable corepack for pnpm in production
 RUN corepack enable && corepack prepare pnpm@10.11.0 --activate
 
+# Create non-root user with fixed UID
+RUN groupadd --gid 1000 haya && \
+    useradd --uid 1000 --gid haya --shell /bin/sh --create-home haya
+
 WORKDIR /app
 
 # Copy built artifacts and production dependencies
@@ -47,19 +51,18 @@ COPY --from=build /app/extensions/slack/src ./extensions/slack/src
 COPY --from=build /app/extensions/slack/node_modules ./extensions/slack/node_modules
 
 # Create data directory for persistent state
-RUN mkdir -p /app/data && chown -R node:node /app
+RUN mkdir -p /home/haya/.haya && chown -R haya:haya /app /home/haya/.haya
 
 # Security: run as non-root user
-USER node
+USER haya
 
 ENV NODE_ENV=production
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "try { const r = await fetch('http://localhost:' + (process.env.HAYA_PORT || 3120) + '/health'); process.exit(r.ok ? 0 : 1); } catch { process.exit(1); }"
+  CMD node -e "try { const r = await fetch('http://localhost:18789/health'); process.exit(r.ok ? 0 : 1); } catch { process.exit(1); }"
 
-EXPOSE 3120
+EXPOSE 18789
 
-# Start gateway — no --allow-unconfigured flag
-# A token is auto-generated on first run if not configured
-CMD ["node", "packages/core/dist/entry.js", "start", "--config", "/app/data/haya.json"]
+# Start gateway
+CMD ["node", "packages/core/dist/entry.js", "start", "--config", "/home/haya/.haya/haya.json"]

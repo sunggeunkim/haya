@@ -171,7 +171,7 @@ export {
   runSecurityAudit,
   formatAuditResults,
 } from "./security/audit.js";
-export type { AuditResult } from "./security/audit.js";
+export type { AuditResult, SecurityAuditReport } from "./security/audit.js";
 
 // Security — Plugin sandbox
 export {

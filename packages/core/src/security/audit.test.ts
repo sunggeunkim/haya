@@ -3,6 +3,7 @@ import {
   runSecurityAudit,
   formatAuditResults,
   type AuditResult,
+  type SecurityAuditReport,
 } from "./audit.js";
 import * as fs from "node:fs/promises";
 
@@ -32,16 +33,19 @@ describe("runSecurityAudit", () => {
     });
   }
 
-  it("returns 20 audit results", async () => {
+  it("returns a SecurityAuditReport with 20 results", async () => {
     mockReadFile.mockRejectedValue(new Error("ENOENT"));
-    const results = await runSecurityAudit("/fake");
-    expect(results).toHaveLength(20);
+    const report = await runSecurityAudit("/fake");
+    expect(report.results).toHaveLength(20);
+    expect(report.total).toBe(20);
+    expect(report.passed + report.failed + report.warnings).toBe(20);
+    expect(typeof report.ok).toBe("boolean");
   });
 
   it("each result has required fields", async () => {
     mockReadFile.mockRejectedValue(new Error("ENOENT"));
-    const results = await runSecurityAudit("/fake");
-    for (const r of results) {
+    const report = await runSecurityAudit("/fake");
+    for (const r of report.results) {
       expect(r).toHaveProperty("id");
       expect(r).toHaveProperty("severity");
       expect(r).toHaveProperty("description");
@@ -51,25 +55,46 @@ describe("runSecurityAudit", () => {
     }
   });
 
+  it("report.ok is true when no failures", async () => {
+    mockFiles({
+      "config/schema.ts": 'z.enum(["bearer"])',
+      "agent/runtime.ts": "const x = 1;",
+      "gateway/server.ts": "const y = 2;",
+      "plugins/loader.ts": "const z = 3;",
+      "command-exec.ts": "execFileSync(cmd, args)",
+      "secret-equal.ts": "crypto.timingSafeEqual(a, b)",
+      "external-content.ts": "export function wrapExternalContent(c) {}",
+      "config/defaults.ts": "const d = {};",
+      "Dockerfile": "FROM node:22\nRUN corepack enable\nRUN pnpm install --frozen-lockfile\nUSER haya",
+    });
+    const report = await runSecurityAudit("/fake");
+    // Some checks may warn (file not found) but none should fail
+    const criticalFails = report.results.filter(
+      (r) => r.status === "fail" && r.severity === "critical",
+    );
+    expect(criticalFails).toHaveLength(0);
+  });
+
   describe("CRIT-1: No none auth mode", () => {
     it("passes when schema has no 'none' mode", async () => {
       mockFile("config/schema.ts", 'z.enum(["bearer", "basic"])');
-      const results = await runSecurityAudit("/fake");
-      const crit1 = results.find((r) => r.id === "CRIT-1");
+      const report = await runSecurityAudit("/fake");
+      const crit1 = report.results.find((r) => r.id === "CRIT-1");
       expect(crit1?.status).toBe("pass");
     });
 
     it("fails when schema contains 'none' mode", async () => {
       mockFile("config/schema.ts", 'z.enum(["none", "bearer"])');
-      const results = await runSecurityAudit("/fake");
-      const crit1 = results.find((r) => r.id === "CRIT-1");
+      const report = await runSecurityAudit("/fake");
+      const crit1 = report.results.find((r) => r.id === "CRIT-1");
       expect(crit1?.status).toBe("fail");
+      expect(report.ok).toBe(false);
     });
 
     it("warns when schema file is missing", async () => {
       mockReadFile.mockRejectedValue(new Error("ENOENT"));
-      const results = await runSecurityAudit("/fake");
-      const crit1 = results.find((r) => r.id === "CRIT-1");
+      const report = await runSecurityAudit("/fake");
+      const crit1 = report.results.find((r) => r.id === "CRIT-1");
       expect(crit1?.status).toBe("warn");
     });
   });
@@ -81,8 +106,8 @@ describe("runSecurityAudit", () => {
         "gateway/server.ts": "const y = 2;",
         "plugins/loader.ts": "const z = 3;",
       });
-      const results = await runSecurityAudit("/fake");
-      const crit2 = results.find((r) => r.id === "CRIT-2");
+      const report = await runSecurityAudit("/fake");
+      const crit2 = report.results.find((r) => r.id === "CRIT-2");
       expect(crit2?.status).toBe("pass");
     });
 
@@ -92,8 +117,8 @@ describe("runSecurityAudit", () => {
         "gateway/server.ts": "",
         "plugins/loader.ts": "",
       });
-      const results = await runSecurityAudit("/fake");
-      const crit2 = results.find((r) => r.id === "CRIT-2");
+      const report = await runSecurityAudit("/fake");
+      const crit2 = report.results.find((r) => r.id === "CRIT-2");
       expect(crit2?.status).toBe("fail");
     });
 
@@ -103,8 +128,8 @@ describe("runSecurityAudit", () => {
         "gateway/server.ts": "const fn = new Function('return 1');",
         "plugins/loader.ts": "",
       });
-      const results = await runSecurityAudit("/fake");
-      const crit2 = results.find((r) => r.id === "CRIT-2");
+      const report = await runSecurityAudit("/fake");
+      const crit2 = report.results.find((r) => r.id === "CRIT-2");
       expect(crit2?.status).toBe("fail");
     });
   });
@@ -112,15 +137,15 @@ describe("runSecurityAudit", () => {
   describe("CRIT-3: No shell:true", () => {
     it("passes with execFileSync and no shell:true", async () => {
       mockFile("command-exec.ts", "execFileSync(cmd, args)");
-      const results = await runSecurityAudit("/fake");
-      const crit3 = results.find((r) => r.id === "CRIT-3");
+      const report = await runSecurityAudit("/fake");
+      const crit3 = report.results.find((r) => r.id === "CRIT-3");
       expect(crit3?.status).toBe("pass");
     });
 
     it("fails when shell:true is present", async () => {
       mockFile("command-exec.ts", "exec(cmd, { shell: true })");
-      const results = await runSecurityAudit("/fake");
-      const crit3 = results.find((r) => r.id === "CRIT-3");
+      const report = await runSecurityAudit("/fake");
+      const crit3 = report.results.find((r) => r.id === "CRIT-3");
       expect(crit3?.status).toBe("fail");
     });
   });
@@ -128,15 +153,15 @@ describe("runSecurityAudit", () => {
   describe("HIGH-1: Constant-time comparison", () => {
     it("passes when timingSafeEqual is used", async () => {
       mockFile("secret-equal.ts", "crypto.timingSafeEqual(a, b)");
-      const results = await runSecurityAudit("/fake");
-      const high1 = results.find((r) => r.id === "HIGH-1");
+      const report = await runSecurityAudit("/fake");
+      const high1 = report.results.find((r) => r.id === "HIGH-1");
       expect(high1?.status).toBe("pass");
     });
 
     it("fails when timingSafeEqual is not used", async () => {
       mockFile("secret-equal.ts", "return a === b;");
-      const results = await runSecurityAudit("/fake");
-      const high1 = results.find((r) => r.id === "HIGH-1");
+      const report = await runSecurityAudit("/fake");
+      const high1 = report.results.find((r) => r.id === "HIGH-1");
       expect(high1?.status).toBe("fail");
     });
   });
@@ -147,8 +172,8 @@ describe("runSecurityAudit", () => {
         "external-content.ts",
         "export function wrapExternalContent(c) { return c; }",
       );
-      const results = await runSecurityAudit("/fake");
-      const high2 = results.find((r) => r.id === "HIGH-2");
+      const report = await runSecurityAudit("/fake");
+      const high2 = report.results.find((r) => r.id === "HIGH-2");
       expect(high2?.status).toBe("pass");
     });
   });
@@ -159,8 +184,8 @@ describe("runSecurityAudit", () => {
         "config/schema.ts": "const schema = z.object({});",
         "config/defaults.ts": "const defaults = {};",
       });
-      const results = await runSecurityAudit("/fake");
-      const high3 = results.find((r) => r.id === "HIGH-3");
+      const report = await runSecurityAudit("/fake");
+      const high3 = report.results.find((r) => r.id === "HIGH-3");
       expect(high3?.status).toBe("pass");
     });
 
@@ -170,8 +195,8 @@ describe("runSecurityAudit", () => {
           'const key = "sk-abc123456789012345";',
         "config/defaults.ts": "",
       });
-      const results = await runSecurityAudit("/fake");
-      const high3 = results.find((r) => r.id === "HIGH-3");
+      const report = await runSecurityAudit("/fake");
+      const high3 = report.results.find((r) => r.id === "HIGH-3");
       expect(high3?.status).toBe("fail");
     });
   });
@@ -184,11 +209,11 @@ describe("runSecurityAudit", () => {
           "FROM node:22-bookworm-slim",
           "RUN corepack enable",
           "RUN pnpm install --frozen-lockfile",
-          "USER node",
+          "USER haya",
         ].join("\n"),
       );
-      const results = await runSecurityAudit("/fake");
-      const low7 = results.find((r) => r.id === "LOW-7");
+      const report = await runSecurityAudit("/fake");
+      const low7 = report.results.find((r) => r.id === "LOW-7");
       expect(low7?.status).toBe("pass");
     });
 
@@ -197,15 +222,15 @@ describe("runSecurityAudit", () => {
         "Dockerfile",
         "RUN curl -fsSL https://example.com/install.sh | bash",
       );
-      const results = await runSecurityAudit("/fake");
-      const low7 = results.find((r) => r.id === "LOW-7");
+      const report = await runSecurityAudit("/fake");
+      const low7 = report.results.find((r) => r.id === "LOW-7");
       expect(low7?.status).toBe("fail");
     });
 
     it("warns when Dockerfile is missing", async () => {
       mockReadFile.mockRejectedValue(new Error("ENOENT"));
-      const results = await runSecurityAudit("/fake");
-      const low7 = results.find((r) => r.id === "LOW-7");
+      const report = await runSecurityAudit("/fake");
+      const low7 = report.results.find((r) => r.id === "LOW-7");
       expect(low7?.status).toBe("warn");
     });
 
@@ -218,8 +243,8 @@ describe("runSecurityAudit", () => {
           "RUN pnpm install --frozen-lockfile",
         ].join("\n"),
       );
-      const results = await runSecurityAudit("/fake");
-      const low7 = results.find((r) => r.id === "LOW-7");
+      const report = await runSecurityAudit("/fake");
+      const low7 = report.results.find((r) => r.id === "LOW-7");
       expect(low7?.status).toBe("warn");
       expect(low7?.detail).toContain("Missing non-root USER");
     });
@@ -227,16 +252,23 @@ describe("runSecurityAudit", () => {
 });
 
 describe("formatAuditResults", () => {
+  function makeReport(results: AuditResult[]): SecurityAuditReport {
+    const passed = results.filter((r) => r.status === "pass").length;
+    const failed = results.filter((r) => r.status === "fail").length;
+    const warnings = results.filter((r) => r.status === "warn").length;
+    return { results, passed, failed, warnings, total: results.length, ok: failed === 0 };
+  }
+
   it("formats passing results", () => {
-    const results: AuditResult[] = [
+    const report = makeReport([
       {
         id: "CRIT-1",
         severity: "critical",
         description: "Test check",
         status: "pass",
       },
-    ];
-    const output = formatAuditResults(results);
+    ]);
+    const output = formatAuditResults(report);
     expect(output).toContain("Haya Security Audit");
     expect(output).toContain("[PASS] CRIT-1");
     expect(output).toContain("1 passed, 0 failed, 0 warnings");
@@ -244,7 +276,7 @@ describe("formatAuditResults", () => {
   });
 
   it("formats failing results", () => {
-    const results: AuditResult[] = [
+    const report = makeReport([
       {
         id: "CRIT-2",
         severity: "critical",
@@ -252,8 +284,8 @@ describe("formatAuditResults", () => {
         status: "fail",
         detail: "Found eval()",
       },
-    ];
-    const output = formatAuditResults(results);
+    ]);
+    const output = formatAuditResults(report);
     expect(output).toContain("[FAIL] CRIT-2");
     expect(output).toContain("Found eval()");
     expect(output).toContain("0 passed, 1 failed, 0 warnings");
@@ -261,7 +293,7 @@ describe("formatAuditResults", () => {
   });
 
   it("formats warning results", () => {
-    const results: AuditResult[] = [
+    const report = makeReport([
       {
         id: "MED-1",
         severity: "medium",
@@ -269,15 +301,15 @@ describe("formatAuditResults", () => {
         status: "warn",
         detail: "File not found",
       },
-    ];
-    const output = formatAuditResults(results);
+    ]);
+    const output = formatAuditResults(report);
     expect(output).toContain("[WARN] MED-1");
     expect(output).toContain("File not found");
     expect(output).toContain("0 passed, 0 failed, 1 warnings");
   });
 
   it("includes total check count", () => {
-    const results: AuditResult[] = [
+    const report = makeReport([
       {
         id: "A",
         severity: "high",
@@ -296,8 +328,8 @@ describe("formatAuditResults", () => {
         description: "Check C",
         status: "warn",
       },
-    ];
-    const output = formatAuditResults(results);
+    ]);
+    const output = formatAuditResults(report);
     expect(output).toContain("Total checks: 3");
     expect(output).toContain("1 passed, 1 failed, 1 warnings");
   });
