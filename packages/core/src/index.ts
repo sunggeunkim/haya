@@ -82,3 +82,44 @@ export { parseRequest, buildResponse, buildErrorResponse, buildEvent, serializeF
 export { GatewayRequestSchema, GatewayResponseSchema, GatewayEventSchema, GatewayFrameSchema } from "./gateway/protocol/schema.js";
 export { ErrorCodes } from "./gateway/protocol/types.js";
 export type { GatewayRequest, GatewayResponse, GatewayError, GatewayEvent } from "./gateway/protocol/types.js";
+
+// Agent
+export { AgentRuntime } from "./agent/runtime.js";
+export type { AgentRuntimeConfig } from "./agent/runtime.js";
+export { createProvider } from "./agent/providers.js";
+export type { AIProvider } from "./agent/providers.js";
+export { ToolRegistry } from "./agent/tools.js";
+export type {
+  AgentTool,
+  ChatRequest,
+  ChatResponse,
+  ChatChunkEvent,
+  CompletionRequest,
+  CompletionResponse,
+  Message,
+  MessageRole,
+  ProviderConfig,
+  StreamCallback,
+  TokenUsage,
+  ToolCall,
+  ToolResult,
+} from "./agent/types.js";
+
+// Sessions
+export { SessionStore } from "./sessions/store.js";
+export { HistoryManager } from "./sessions/history.js";
+export type {
+  Session,
+  SessionEntry,
+  SessionListItem,
+  SessionMeta,
+} from "./sessions/types.js";
+
+// Gateway server methods
+export { createChatSendHandler } from "./gateway/server-methods/chat.js";
+export {
+  createSessionsListHandler,
+  createSessionsCreateHandler,
+  createSessionsDeleteHandler,
+  createSessionsHistoryHandler,
+} from "./gateway/server-methods/sessions.js";
