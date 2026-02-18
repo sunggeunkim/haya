@@ -123,3 +123,27 @@ export {
   createSessionsDeleteHandler,
   createSessionsHistoryHandler,
 } from "./gateway/server-methods/sessions.js";
+
+// Memory
+export { createMemoryManager } from "./memory/manager.js";
+export type { MemoryManagerConfig } from "./memory/manager.js";
+export { createMemoryDatabase } from "./memory/sqlite.js";
+export type { MemoryDatabase } from "./memory/sqlite.js";
+export {
+  loadSqliteVec,
+  createVectorIndex,
+  distanceToScore,
+  normalizeEmbedding,
+} from "./memory/sqlite-vec.js";
+export type { VectorIndex } from "./memory/sqlite-vec.js";
+export { createEmbeddingProvider } from "./memory/embeddings.js";
+export type { EmbeddingProviderConfig } from "./memory/embeddings.js";
+export { hybridSearch, bm25RankToScore } from "./memory/hybrid.js";
+export type {
+  MemoryEntry,
+  MemorySearchResult,
+  MemorySearchManager,
+  EmbeddingProvider,
+  HybridSearchOptions,
+} from "./memory/types.js";
+export { DEFAULT_HYBRID_OPTIONS } from "./memory/types.js";
