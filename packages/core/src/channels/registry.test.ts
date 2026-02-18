@@ -8,9 +8,11 @@ function createTestChannel(
   return {
     id: "test-channel",
     name: "Test Channel",
+    capabilities: { chatTypes: ["text"] },
     start: vi.fn().mockResolvedValue(undefined),
     stop: vi.fn().mockResolvedValue(undefined),
     status: vi.fn().mockReturnValue({ connected: false }),
+    sendMessage: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }

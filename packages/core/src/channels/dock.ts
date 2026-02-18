@@ -1,4 +1,10 @@
-import type { ChannelPlugin, ChannelStatus } from "./types.js";
+import type {
+  ChannelPlugin,
+  ChannelStatus,
+  ChannelConfig,
+  ChannelRuntime,
+  InboundMessage,
+} from "./types.js";
 import { ChannelRegistry } from "./registry.js";
 import { createLogger } from "../infra/logger.js";
 
@@ -14,21 +20,35 @@ export interface ChannelDockStatus {
 
 /**
  * Channel dock manages the lifecycle of all registered channels.
- * Provides start/stop/status operations across all channels.
+ * Provides start/stop/restart/status operations across all channels.
+ * Wires inbound messages from channels to the agent runtime.
  */
 export class ChannelDock {
   private readonly registry: ChannelRegistry;
   private running = false;
+  private messageProcessor:
+    | ((msg: InboundMessage) => Promise<void>)
+    | null = null;
 
   constructor(registry: ChannelRegistry) {
     this.registry = registry;
   }
 
   /**
+   * Set the function that processes inbound messages from channels
+   * (typically the agent runtime's processMessage method).
+   */
+  onMessage(handler: (msg: InboundMessage) => Promise<void>): void {
+    this.messageProcessor = handler;
+  }
+
+  /**
    * Start all registered channels.
    * Continues starting remaining channels if one fails.
    */
-  async startAll(): Promise<{
+  async startAll(
+    configs?: Map<string, ChannelConfig>,
+  ): Promise<{
     started: string[];
     failed: Array<{ id: string; error: string }>;
   }> {
@@ -37,7 +57,9 @@ export class ChannelDock {
 
     for (const channel of this.registry.list()) {
       try {
-        await channel.start();
+        const config = configs?.get(channel.id) ?? { settings: {} };
+        const runtime = this.buildRuntime(channel.id);
+        await channel.start(config, runtime);
         started.push(channel.id);
         log.info(`Channel "${channel.id}" started`);
       } catch (err) {
@@ -71,12 +93,16 @@ export class ChannelDock {
   /**
    * Start a specific channel by ID.
    */
-  async startChannel(channelId: string): Promise<void> {
+  async startChannel(
+    channelId: string,
+    config?: ChannelConfig,
+  ): Promise<void> {
     const channel = this.registry.get(channelId);
     if (!channel) {
       throw new Error(`Channel "${channelId}" not found`);
     }
-    await channel.start();
+    const runtime = this.buildRuntime(channelId);
+    await channel.start(config ?? { settings: {} }, runtime);
     log.info(`Channel "${channelId}" started`);
   }
 
@@ -90,6 +116,23 @@ export class ChannelDock {
     }
     await channel.stop();
     log.info(`Channel "${channelId}" stopped`);
+  }
+
+  /**
+   * Restart a specific channel by ID (stop then start).
+   */
+  async restartChannel(
+    channelId: string,
+    config?: ChannelConfig,
+  ): Promise<void> {
+    const channel = this.registry.get(channelId);
+    if (!channel) {
+      throw new Error(`Channel "${channelId}" not found`);
+    }
+    await channel.stop();
+    const runtime = this.buildRuntime(channelId);
+    await channel.start(config ?? { settings: {} }, runtime);
+    log.info(`Channel "${channelId}" restarted`);
   }
 
   /**
@@ -110,5 +153,26 @@ export class ChannelDock {
    */
   get isRunning(): boolean {
     return this.running;
+  }
+
+  /**
+   * Build a ChannelRuntime for a specific channel, wiring inbound
+   * messages to the message processor.
+   */
+  private buildRuntime(channelId: string): ChannelRuntime {
+    const channelLogger = createLogger(`channel:${channelId}`);
+
+    return {
+      onMessage: async (msg: InboundMessage) => {
+        if (this.messageProcessor) {
+          await this.messageProcessor(msg);
+        } else {
+          log.warn(
+            `No message processor configured; dropping message from channel "${channelId}"`,
+          );
+        }
+      },
+      logger: channelLogger,
+    };
   }
 }

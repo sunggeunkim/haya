@@ -200,4 +200,67 @@ describe("CronStore", () => {
     expect(job.updatedAt).toBeGreaterThanOrEqual(before);
     expect(job.updatedAt).toBeLessThanOrEqual(after);
   });
+
+  it("adds a job dynamically", async () => {
+    const store = new CronStore(storePath);
+    await store.load([]);
+
+    const entry = store.add({
+      name: "dynamic-job",
+      schedule: "*/5 * * * *",
+      action: "run-task",
+    });
+
+    expect(entry.id).toBeDefined();
+    expect(entry.name).toBe("dynamic-job");
+    expect(entry.schedule).toBe("*/5 * * * *");
+    expect(entry.enabled).toBe(true);
+    expect(store.size).toBe(1);
+  });
+
+  it("rejects adding duplicate job name", async () => {
+    const store = new CronStore(storePath);
+    await store.load(testJobs);
+
+    expect(() =>
+      store.add({
+        name: "daily-backup",
+        schedule: "0 3 * * *",
+        action: "backup2",
+      }),
+    ).toThrow("already exists");
+  });
+
+  it("adds a disabled job", async () => {
+    const store = new CronStore(storePath);
+    await store.load([]);
+
+    const entry = store.add({
+      name: "disabled-dynamic",
+      schedule: "0 * * * *",
+      action: "noop",
+      enabled: false,
+    });
+
+    expect(entry.enabled).toBe(false);
+  });
+
+  it("removes a job by id", async () => {
+    const store = new CronStore(storePath);
+    await store.load(testJobs);
+
+    const job = store.getByName("daily-backup")!;
+    const removed = store.remove(job.id);
+
+    expect(removed).toBe(true);
+    expect(store.size).toBe(1);
+    expect(store.get(job.id)).toBeUndefined();
+  });
+
+  it("returns false when removing non-existent job", async () => {
+    const store = new CronStore(storePath);
+    await store.load([]);
+
+    expect(store.remove("nonexistent")).toBe(false);
+  });
 });

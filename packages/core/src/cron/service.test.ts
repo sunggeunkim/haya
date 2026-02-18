@@ -166,4 +166,70 @@ describe("CronService", () => {
 
     service.stop();
   });
+
+  it("adds a job dynamically while running", async () => {
+    const service = new CronService(store);
+    await service.init([]);
+    service.start();
+
+    const entry = await service.addJob({
+      name: "dynamic-job",
+      schedule: "0 * * * *",
+      action: "test",
+    });
+
+    expect(entry.name).toBe("dynamic-job");
+    expect(service.activeTimerCount).toBe(1);
+    expect(service.listJobs()).toHaveLength(1);
+
+    service.stop();
+  });
+
+  it("adds a job dynamically while stopped (no scheduling)", async () => {
+    const service = new CronService(store);
+    await service.init([]);
+
+    const entry = await service.addJob({
+      name: "pending-job",
+      schedule: "0 * * * *",
+      action: "test",
+    });
+
+    expect(entry.name).toBe("pending-job");
+    expect(service.activeTimerCount).toBe(0);
+    expect(service.listJobs()).toHaveLength(1);
+  });
+
+  it("removes a job and stops its timer", async () => {
+    const service = new CronService(store);
+    await service.init([testJobs[0]]);
+    service.start();
+
+    expect(service.activeTimerCount).toBe(1);
+
+    const job = store.getByName("fast-job")!;
+    const removed = await service.removeJob(job.id);
+
+    expect(removed).toBe(true);
+    expect(service.activeTimerCount).toBe(0);
+    expect(service.listJobs()).toHaveLength(0);
+
+    service.stop();
+  });
+
+  it("returns false when removing non-existent job", async () => {
+    const service = new CronService(store);
+    await service.init([]);
+
+    const removed = await service.removeJob("nonexistent");
+    expect(removed).toBe(false);
+  });
+
+  it("lists all jobs", async () => {
+    const service = new CronService(store);
+    await service.init(testJobs);
+
+    const jobs = service.listJobs();
+    expect(jobs).toHaveLength(2);
+  });
 });

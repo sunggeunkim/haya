@@ -181,8 +181,11 @@ export type { ChannelDockStatus } from "./channels/dock.js";
 export type {
   ChannelPlugin,
   ChannelStatus,
-  ChannelInboundMessage,
-  ChannelOutboundMessage,
+  ChannelCapabilities,
+  ChannelConfig,
+  ChannelRuntime,
+  InboundMessage,
+  OutboundMessage,
   ChannelMessageHandler,
 } from "./channels/types.js";
 
@@ -201,4 +204,6 @@ export {
 export {
   createCronListHandler,
   createCronStatusHandler,
+  createCronAddHandler,
+  createCronRemoveHandler,
 } from "./gateway/server-methods/cron.js";

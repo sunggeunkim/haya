@@ -139,6 +139,41 @@ export class CronStore {
   }
 
   /**
+   * Add a new job dynamically (at runtime, not from config).
+   * Returns the created job entry.
+   */
+  add(params: {
+    name: string;
+    schedule: string;
+    action: string;
+    enabled?: boolean;
+  }): CronJobEntry {
+    if (this.getByName(params.name)) {
+      throw new Error(`Job "${params.name}" already exists`);
+    }
+
+    const now = Date.now();
+    const entry: CronJobEntry = {
+      id: randomUUID(),
+      name: params.name,
+      schedule: params.schedule,
+      action: params.action,
+      enabled: params.enabled ?? true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.jobs.set(entry.id, entry);
+    return entry;
+  }
+
+  /**
+   * Remove a job by ID. Returns true if the job was found and removed.
+   */
+  remove(jobId: string): boolean {
+    return this.jobs.delete(jobId);
+  }
+
+  /**
    * Get the number of jobs.
    */
   get size(): number {
