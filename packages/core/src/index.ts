@@ -147,3 +147,29 @@ export type {
   HybridSearchOptions,
 } from "./memory/types.js";
 export { DEFAULT_HYBRID_OPTIONS } from "./memory/types.js";
+
+// Plugins
+export { PluginRegistry } from "./plugins/registry.js";
+export { HookRegistry } from "./plugins/hooks.js";
+export { loadPluginModule, loadPlugins } from "./plugins/loader.js";
+export type {
+  PluginDefinition,
+  PluginApi,
+  PluginPermissions,
+  PluginLogger,
+  HookHandler,
+  LoadedPlugin,
+  PluginStatus,
+  HostToWorkerMessage,
+  WorkerToHostMessage,
+  WorkerPluginManifest,
+  WorkerToolDefinition,
+} from "./plugins/types.js";
+
+// Security — Plugin sandbox
+export {
+  createSandboxedWorker,
+  buildPermissionFlags,
+  validatePluginPermissions,
+} from "./security/plugin-sandbox.js";
+export type { SandboxedWorker, SandboxOptions } from "./security/plugin-sandbox.js";
