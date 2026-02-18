@@ -1,0 +1,156 @@
+import type { Logger } from "tslog";
+import { createLogger } from "../infra/logger.js";
+import type { AIProvider } from "./providers.js";
+import { ToolRegistry } from "./tools.js";
+import type {
+  ChatChunkEvent,
+  ChatRequest,
+  ChatResponse,
+  CompletionRequest,
+  Message,
+  StreamCallback,
+} from "./types.js";
+
+/**
+ * Agent runtime — the message -> AI -> response pipeline.
+ * Handles tool call loops: if the AI requests tool calls, executes them
+ * and re-sends the conversation with results until the AI produces
+ * a final text response.
+ */
+
+export interface AgentRuntimeConfig {
+  defaultModel: string;
+  systemPrompt?: string;
+  maxToolRounds?: number;
+  maxTokens?: number;
+  temperature?: number;
+}
+
+const DEFAULT_MAX_TOOL_ROUNDS = 10;
+
+export class AgentRuntime {
+  readonly tools: ToolRegistry;
+  private readonly provider: AIProvider;
+  private readonly config: AgentRuntimeConfig;
+  private readonly logger: Logger<unknown>;
+
+  constructor(
+    provider: AIProvider,
+    config: AgentRuntimeConfig,
+    options?: { tools?: ToolRegistry; logger?: Logger<unknown> },
+  ) {
+    this.provider = provider;
+    this.config = config;
+    this.tools = options?.tools ?? new ToolRegistry();
+    this.logger = options?.logger ?? createLogger("agent-runtime");
+  }
+
+  /**
+   * Process a chat request through the AI pipeline.
+   * Manages tool call loops automatically.
+   */
+  async chat(
+    request: ChatRequest,
+    history: Message[],
+    onChunk?: StreamCallback,
+  ): Promise<ChatResponse> {
+    const model = request.model ?? this.config.defaultModel;
+    const systemPrompt = request.systemPrompt ?? this.config.systemPrompt;
+    const maxRounds = this.config.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
+
+    // Build message array: system prompt + history + new user message
+    const messages: Message[] = [];
+
+    if (systemPrompt) {
+      messages.push({ role: "system", content: systemPrompt });
+    }
+
+    messages.push(...history);
+    messages.push({
+      role: "user",
+      content: request.message,
+      timestamp: Date.now(),
+    });
+
+    const availableTools = this.tools.list();
+
+    let round = 0;
+    while (round < maxRounds) {
+      round++;
+
+      const completionRequest: CompletionRequest = {
+        model,
+        messages,
+        tools: availableTools.length > 0 ? availableTools : undefined,
+        maxTokens: this.config.maxTokens,
+        temperature: this.config.temperature,
+      };
+
+      this.logger.debug(`Completion round ${round}, model: ${model}`);
+      const response = await this.provider.complete(completionRequest);
+
+      messages.push(response.message);
+
+      // If the AI wants to call tools, execute them and loop
+      if (
+        response.finishReason === "tool_calls" &&
+        response.message.toolCalls &&
+        response.message.toolCalls.length > 0
+      ) {
+        this.logger.debug(
+          `Tool calls requested: ${response.message.toolCalls.map((tc) => tc.name).join(", ")}`,
+        );
+
+        const results = await this.tools.executeAll(
+          response.message.toolCalls,
+        );
+
+        // Add tool results to the conversation
+        for (const result of results) {
+          messages.push({
+            role: "tool",
+            content: result.content,
+            toolCallId: result.toolCallId,
+          });
+        }
+
+        continue;
+      }
+
+      // Final response — emit chunk if streaming
+      if (onChunk && response.message.content) {
+        onChunk({
+          sessionId: request.sessionId,
+          delta: response.message.content,
+          done: true,
+        });
+      }
+
+      return {
+        sessionId: request.sessionId,
+        message: {
+          ...response.message,
+          timestamp: Date.now(),
+        },
+        usage: response.usage,
+      };
+    }
+
+    // Max tool rounds exceeded
+    this.logger.warn(
+      `Max tool rounds (${maxRounds}) exceeded for session ${request.sessionId}`,
+    );
+
+    const fallbackMessage: Message = {
+      role: "assistant",
+      content:
+        "I was unable to complete the task within the allowed number of tool execution rounds.",
+      timestamp: Date.now(),
+    };
+
+    return {
+      sessionId: request.sessionId,
+      message: fallbackMessage,
+    };
+  }
+}
