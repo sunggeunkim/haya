@@ -1,0 +1,27 @@
+services:
+  haya:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: haya-gateway
+    restart: unless-stopped
+    ports:
+      - "${HAYA_PORT:-3120}:3120"
+    volumes:
+      - haya-data:/app/data
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - HAYA_PORT=3120
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+
+volumes:
+  haya-data:
+    driver: local

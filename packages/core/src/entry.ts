@@ -228,4 +228,27 @@ program
     console.log(JSON.stringify(redacted, null, 2));
   });
 
+// --- haya audit ---
+program
+  .command("audit")
+  .description("Run security audit checks against the codebase")
+  .option(
+    "-r, --root <path>",
+    "Root directory of the project",
+    process.cwd(),
+  )
+  .action(async (options: { root: string }) => {
+    const { runSecurityAudit, formatAuditResults } = await import(
+      "./security/audit.js"
+    );
+
+    const results = await runSecurityAudit(options.root);
+    console.log(formatAuditResults(results));
+
+    const failed = results.filter((r) => r.status === "fail").length;
+    if (failed > 0) {
+      process.exit(1);
+    }
+  });
+
 program.parse();
