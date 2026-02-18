@@ -10,7 +10,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "tsc --noEmit",
-    "dev": "tsx packages/core/src/entry.ts"
+    "dev": "tsx packages/core/src/entry.ts",
+    "audit:security": "tsx packages/core/src/entry.ts audit"
   },
   "engines": {
     "node": ">=22.12.0"

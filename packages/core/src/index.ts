@@ -166,6 +166,13 @@ export type {
   WorkerToolDefinition,
 } from "./plugins/types.js";
 
+// Security — Audit
+export {
+  runSecurityAudit,
+  formatAuditResults,
+} from "./security/audit.js";
+export type { AuditResult } from "./security/audit.js";
+
 // Security — Plugin sandbox
 export {
   createSandboxedWorker,

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+.git/
+.env
+.env.local
+.env.*.local
+*.log
+*.pid
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.claude/
+README.md
+ARCHITECTURE.md
