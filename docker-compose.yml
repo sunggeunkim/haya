@@ -6,14 +6,19 @@ services:
     container_name: haya-gateway
     restart: unless-stopped
     ports:
-      - "${HAYA_PORT:-3120}:3120"
+      - "${HAYA_PORT:-18789}:18789"
     volumes:
-      - haya-data:/app/data
+      - ${HAYA_DATA_DIR:-~/.haya}:/home/haya/.haya
     env_file:
       - .env
     environment:
       - NODE_ENV=production
-      - HAYA_PORT=3120
+      - ASSISTANT_GATEWAY_TOKEN
+      - OPENAI_API_KEY
+      - SLACK_BOT_TOKEN
+      - SLACK_APP_TOKEN
+      - SLACK_SIGNING_SECRET
+      - EMBEDDING_API_KEY
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -21,7 +26,3 @@ services:
       - /tmp:noexec,nosuid,size=64m
     cap_drop:
       - ALL
-
-volumes:
-  haya-data:
-    driver: local

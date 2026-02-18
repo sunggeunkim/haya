@@ -242,11 +242,10 @@ program
       "./security/audit.js"
     );
 
-    const results = await runSecurityAudit(options.root);
-    console.log(formatAuditResults(results));
+    const report = await runSecurityAudit(options.root);
+    console.log(formatAuditResults(report));
 
-    const failed = results.filter((r) => r.status === "fail").length;
-    if (failed > 0) {
+    if (!report.ok) {
       process.exit(1);
     }
   });

@@ -9,13 +9,22 @@ export interface AuditResult {
   detail?: string;
 }
 
+export interface SecurityAuditReport {
+  results: AuditResult[];
+  passed: number;
+  failed: number;
+  warnings: number;
+  total: number;
+  ok: boolean;
+}
+
 /**
  * Run security audit checks against the codebase.
  * Validates that all 20 OpenClaw vulnerability classes are addressed.
  */
 export async function runSecurityAudit(
   rootDir: string,
-): Promise<AuditResult[]> {
+): Promise<SecurityAuditReport> {
   const results: AuditResult[] = [];
 
   // CRIT-1: No "none" auth mode
@@ -78,7 +87,18 @@ export async function runSecurityAudit(
   // LOW-7: No curl|bash in Dockerfile
   results.push(await checkDockerfile(rootDir));
 
-  return results;
+  const passed = results.filter((r) => r.status === "pass").length;
+  const failed = results.filter((r) => r.status === "fail").length;
+  const warnings = results.filter((r) => r.status === "warn").length;
+
+  return {
+    results,
+    passed,
+    failed,
+    warnings,
+    total: results.length,
+    ok: failed === 0,
+  };
 }
 
 async function readSourceFile(
@@ -505,7 +525,7 @@ async function checkDockerfile(rootDir: string): Promise<AuditResult> {
     };
   }
   const hasCurlBash = /curl.*\|.*bash|wget.*\|.*sh/.test(content);
-  const hasNonRoot = /USER\s+node/.test(content);
+  const hasNonRoot = /USER\s+haya/.test(content);
   const hasFrozenLockfile = /frozen-lockfile/.test(content);
   const hasCorepack = /corepack\s+enable/.test(content);
 
@@ -536,14 +556,10 @@ async function checkDockerfile(rootDir: string): Promise<AuditResult> {
 /**
  * Format audit results for console output.
  */
-export function formatAuditResults(results: AuditResult[]): string {
+export function formatAuditResults(report: SecurityAuditReport): string {
   const lines: string[] = ["Haya Security Audit", "=".repeat(50)];
 
-  const passed = results.filter((r) => r.status === "pass").length;
-  const failed = results.filter((r) => r.status === "fail").length;
-  const warned = results.filter((r) => r.status === "warn").length;
-
-  for (const r of results) {
+  for (const r of report.results) {
     const icon =
       r.status === "pass" ? "PASS" : r.status === "fail" ? "FAIL" : "WARN";
     const line = `  [${icon}] ${r.id} (${r.severity}): ${r.description}`;
@@ -554,10 +570,10 @@ export function formatAuditResults(results: AuditResult[]): string {
   }
 
   lines.push("");
-  lines.push(`Results: ${passed} passed, ${failed} failed, ${warned} warnings`);
-  lines.push(`Total checks: ${results.length}`);
+  lines.push(`Results: ${report.passed} passed, ${report.failed} failed, ${report.warnings} warnings`);
+  lines.push(`Total checks: ${report.total}`);
 
-  if (failed > 0) {
+  if (report.failed > 0) {
     lines.push("");
     lines.push("AUDIT FAILED: Security vulnerabilities detected");
   } else {
