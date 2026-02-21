@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import "dotenv/config";
 import { Command } from "commander";
 
 const program = new Command();
@@ -71,6 +72,13 @@ program
       // Initialize channel dock
       const channelRegistry = new ChannelRegistry();
       const channelDock = new ChannelDock(channelRegistry);
+
+      // Auto-register channels based on environment variables
+      if (process.env.SLACK_BOT_TOKEN) {
+        const { createSlackChannel } = await import("@haya/slack");
+        channelRegistry.register(createSlackChannel());
+        log.info("Slack channel detected via SLACK_BOT_TOKEN");
+      }
 
       // Initialize cron service
       const cronStore = new CronStore(
