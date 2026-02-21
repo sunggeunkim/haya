@@ -36,6 +36,13 @@ pnpm dev start
 
 The gateway starts on port 18789 (configurable) and requires authentication on every connection.
 
+### Health check
+
+```bash
+curl http://localhost:18789/health
+# => {"status":"ok"}
+```
+
 ### Docker
 
 ```bash
