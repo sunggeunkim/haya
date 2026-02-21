@@ -8,6 +8,8 @@ coverage/
 .env.*.local
 haya.json
 
+sessions/
+
 *.log
 *.pid
 
