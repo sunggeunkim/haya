@@ -1,0 +1,16 @@
+{
+  "name": "@haya/teams",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@haya/core": "workspace:*",
+    "@haya/plugin-sdk": "workspace:*",
+    "botbuilder": "^4",
+    "botframework-connector": "^4"
+  }
+}

@@ -81,6 +81,7 @@ packages/
 
 extensions/
   slack/          Slack channel integration (@slack/bolt Socket Mode)
+  teams/          Microsoft Teams channel integration (Bot Framework)
 ```
 
 ## Development
@@ -123,6 +124,7 @@ Run `pnpm audit:security` to verify. See [docs/security.md](docs/security.md) fo
 - [API Reference](docs/api.md) -- Gateway protocol and methods
 - [Plugin Development](docs/plugins.md) -- Building plugins with the SDK
 - [Slack Setup](docs/slack-setup.md) -- Slack integration guide
+- [Teams Setup](docs/teams-setup.md) -- Microsoft Teams integration guide
 - [Onboarding](docs/onboarding.md) -- Getting started for new developers
 - [Contributing](CONTRIBUTING.md) -- How to contribute
 
