@@ -81,6 +81,7 @@ program
 
       // Create and start the gateway
       const gateway = createGateway({ config });
+      await gateway.listen();
 
       // Start cron service
       cronService.start();
