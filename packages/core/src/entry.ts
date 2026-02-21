@@ -9,6 +9,39 @@ program
   .description("Haya — Personal AI assistant gateway")
   .version("0.1.0");
 
+// --- haya init ---
+program
+  .command("init")
+  .description("Create a new haya.json config file with a generated token")
+  .option("-c, --config <path>", "Path to config file", "haya.json")
+  .option(
+    "--provider-key-env <var>",
+    "Env var name for the AI provider API key",
+    "OPENAI_API_KEY",
+  )
+  .action(async (options: { config: string; providerKeyEnv: string }) => {
+    const { existsSync } = await import("node:fs");
+    const { initializeConfig } = await import("./config/loader.js");
+
+    if (existsSync(options.config)) {
+      console.error(`Config file already exists: ${options.config}`);
+      process.exit(1);
+    }
+
+    const { generatedToken } = await initializeConfig(
+      options.config,
+      options.providerKeyEnv,
+    );
+
+    console.log(`Created ${options.config} (permissions: 0600)`);
+    console.log();
+    console.log("Add this to your .env file:");
+    console.log(`  ASSISTANT_GATEWAY_TOKEN=${generatedToken}`);
+    console.log();
+    console.log("Then start the gateway:");
+    console.log("  pnpm dev start");
+  });
+
 // --- haya start ---
 program
   .command("start")

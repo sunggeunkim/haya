@@ -6,6 +6,7 @@ coverage/
 .env
 .env.local
 .env.*.local
+haya.json
 
 *.log
 *.pid
