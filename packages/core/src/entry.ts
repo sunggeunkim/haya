@@ -57,6 +57,10 @@ program
     const { CronStore } = await import("./cron/store.js");
     const { ChannelRegistry } = await import("./channels/registry.js");
     const { ChannelDock } = await import("./channels/dock.js");
+    const { createProvider } = await import("./agent/providers.js");
+    const { AgentRuntime } = await import("./agent/runtime.js");
+    const { SessionStore } = await import("./sessions/store.js");
+    const { HistoryManager } = await import("./sessions/history.js");
 
     const log = createLogger("haya");
 
@@ -79,6 +83,56 @@ program
         channelRegistry.register(createSlackChannel());
         log.info("Slack channel detected via SLACK_BOT_TOKEN");
       }
+
+      // Initialize agent runtime for channel messages
+      const provider = createProvider({
+        provider: "openai",
+        apiKeyEnvVar: config.agent.defaultProviderApiKeyEnvVar,
+      });
+      const { builtinTools } = await import("./agent/builtin-tools.js");
+      const agentRuntime = new AgentRuntime(provider, {
+        defaultModel: config.agent.defaultModel,
+        systemPrompt: config.agent.systemPrompt,
+      });
+      for (const tool of builtinTools) {
+        agentRuntime.tools.register(tool);
+      }
+      const sessionStore = new SessionStore("sessions");
+      const historyManager = new HistoryManager(
+        sessionStore,
+        config.agent.maxHistoryMessages,
+      );
+
+      // Wire channel messages to the agent runtime
+      channelDock.onMessage(async (msg) => {
+        const rawKey =
+          (msg.metadata?.sessionKey as string) ??
+          `${msg.channel}:${msg.channelId}`;
+        const sessionKey = rawKey.replace(/:/g, "-");
+
+        log.info(`Processing message from ${msg.senderId} in session ${sessionKey}`);
+
+        const history = historyManager.getHistory(sessionKey);
+        const response = await agentRuntime.chat(
+          { sessionId: sessionKey, message: msg.content },
+          history,
+        );
+
+        // Persist conversation
+        historyManager.addMessages(sessionKey, [
+          { role: "user", content: msg.content, timestamp: msg.timestamp },
+          response.message,
+        ]);
+
+        // Send reply back to the channel
+        const channel = channelRegistry.get(msg.channel);
+        if (channel && response.message.content) {
+          await channel.sendMessage(msg.channelId, {
+            content: response.message.content,
+            threadId: msg.threadId,
+          });
+        }
+      });
 
       // Initialize cron service
       const cronStore = new CronStore(

@@ -72,8 +72,9 @@ export function createSlackChannel(): ChannelPlugin {
 
         const channelType = (message as { channel_type?: string }).channel_type ?? "channel";
 
-        // Wrap external content for prompt injection protection
-        const wrapped = wrapExternalContent(message.text, "slack");
+        // Scan for prompt injection patterns (but don't wrap — this is
+        // the user's direct message, not embedded external content).
+        const { suspiciousPatterns } = wrapExternalContent(message.text, "slack");
 
         runtime.logger.info(
           `Received message from ${message.user} in ${message.channel}`,
@@ -82,7 +83,7 @@ export function createSlackChannel(): ChannelPlugin {
         await runtime.onMessage({
           channelId: message.channel,
           senderId: message.user,
-          content: wrapped.content,
+          content: message.text,
           threadId: ("thread_ts" in message ? message.thread_ts : undefined) as string | undefined,
           channel: "slack",
           timestamp: message.ts ? Number.parseFloat(message.ts) * 1000 : Date.now(),
@@ -90,7 +91,7 @@ export function createSlackChannel(): ChannelPlugin {
             sessionKey: deriveSessionKey(channelType, message.channel, message.user),
             botId: context.botId,
             channelType,
-            promptInjectionWarnings: wrapped.warnings,
+            promptInjectionWarnings: suspiciousPatterns,
           },
         });
       });

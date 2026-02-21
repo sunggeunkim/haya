@@ -54,7 +54,11 @@ export const AssistantConfigSchema = z.object({
   agent: z.object({
     defaultModel: z.string().default("gpt-4o"),
     defaultProviderApiKeyEnvVar: z.string(),
-    systemPrompt: z.string().optional(),
+    systemPrompt: z
+      .string()
+      .default(
+        "You are a helpful assistant responding to users in a chat conversation. Reply directly and concisely.",
+      ),
     maxHistoryMessages: z.number().int().min(0).default(100),
   }),
   memory: MemorySchema.optional(),
