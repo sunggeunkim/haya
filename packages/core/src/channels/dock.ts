@@ -69,7 +69,7 @@ export class ChannelDock {
       }
     }
 
-    this.running = true;
+    this.running = started.length > 0;
     return { started, failed };
   }
 

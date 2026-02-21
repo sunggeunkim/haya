@@ -35,6 +35,7 @@ export function wrapExternalContent(
   content: string,
   source: string,
 ): WrappedContent {
+  const safeSource = source.replace(/[\r\n]/g, " ");
   const suspiciousPatterns: string[] = [];
 
   for (const pattern of SUSPICIOUS_PATTERNS) {
@@ -50,7 +51,7 @@ export function wrapExternalContent(
 
   const text = [
     BOUNDARY_START,
-    `[Source: ${source}]`,
+    `[Source: ${safeSource}]`,
     warning,
     content,
     BOUNDARY_END,

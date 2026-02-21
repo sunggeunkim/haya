@@ -85,7 +85,7 @@ export function createGateway(options: GatewayOptions): GatewayInstance {
   }
 
   async function close(): Promise<void> {
-    wsServer.close();
+    await wsServer.close();
     rateLimiter.dispose();
     return new Promise<void>((resolve, reject) => {
       httpServer.close((err) => {

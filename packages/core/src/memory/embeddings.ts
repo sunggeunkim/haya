@@ -64,6 +64,9 @@ function createOpenAiEmbeddingProvider(
     const data = (await response.json()) as {
       data: Array<{ embedding: number[] }>;
     };
+    if (!data.data?.[0]?.embedding) {
+      throw new Error("Embedding API returned no data");
+    }
     return normalizeEmbedding(data.data[0].embedding);
   }
 
@@ -94,6 +97,9 @@ function createOpenAiEmbeddingProvider(
     const data = (await response.json()) as {
       data: Array<{ embedding: number[]; index: number }>;
     };
+    if (!data.data?.length) {
+      throw new Error("Embedding API returned no data");
+    }
 
     // Sort by index to ensure correct order
     const sorted = data.data.toSorted((a, b) => a.index - b.index);

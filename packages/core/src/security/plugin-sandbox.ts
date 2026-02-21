@@ -12,6 +12,7 @@ export interface SandboxedWorker {
   readonly pluginId: string;
   send(message: HostToWorkerMessage): void;
   onMessage(handler: (message: WorkerToHostMessage) => void): void;
+  onError(handler: (error: Error) => void): void;
   terminate(): Promise<number>;
 }
 
@@ -89,6 +90,10 @@ export function createSandboxedWorker(
     execArgv,
   });
 
+  // Default error handler to prevent uncaught worker errors from crashing the host
+  let lastError: Error | null = null;
+  worker.on("error", (err) => { lastError = err; });
+
   return {
     worker,
     pluginId,
@@ -99,6 +104,10 @@ export function createSandboxedWorker(
 
     onMessage(handler: (message: WorkerToHostMessage) => void): void {
       worker.on("message", handler);
+    },
+
+    onError(handler: (error: Error) => void): void {
+      worker.on("error", handler);
     },
 
     terminate(): Promise<number> {

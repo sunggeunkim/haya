@@ -219,5 +219,60 @@ describe("createEmbeddingProvider", () => {
       // and second to emb1 (all 0.9s) - they should be in original index order
       expect(results).toHaveLength(2);
     });
+
+    it("embed() throws on empty API response", async () => {
+      process.env.TEST_OPENAI_KEY = "sk-test-key-1234";
+
+      vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ data: [] }),
+          { status: 200 },
+        ),
+      );
+
+      const provider = createEmbeddingProvider({
+        provider: "openai",
+        apiKeyEnvVar: "TEST_OPENAI_KEY",
+      });
+
+      await expect(provider.embed("test")).rejects.toThrow(
+        "Embedding API returned no data",
+      );
+    });
+
+    it("embedBatch() throws on 500 response", async () => {
+      process.env.TEST_OPENAI_KEY = "sk-test-key-1234";
+
+      vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+        new Response("Internal Server Error", { status: 500 }),
+      );
+
+      const provider = createEmbeddingProvider({
+        provider: "openai",
+        apiKeyEnvVar: "TEST_OPENAI_KEY",
+      });
+
+      await expect(provider.embedBatch(["text 1", "text 2"])).rejects.toThrow();
+    });
+
+    it("embedBatch() throws on empty data response", async () => {
+      process.env.TEST_OPENAI_KEY = "sk-test-key-1234";
+
+      vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ data: [] }),
+          { status: 200 },
+        ),
+      );
+
+      const provider = createEmbeddingProvider({
+        provider: "openai",
+        apiKeyEnvVar: "TEST_OPENAI_KEY",
+      });
+
+      await expect(provider.embedBatch(["text 1"])).rejects.toThrow(
+        "Embedding API returned no data",
+      );
+    });
   });
 });

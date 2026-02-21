@@ -37,7 +37,7 @@ export interface WsServerOptions {
 export interface GatewayWsServer {
   wss: WebSocketServer;
   broadcast(event: string, data: unknown): void;
-  close(): void;
+  close(): Promise<void>;
   clientCount(): number;
 }
 
@@ -141,12 +141,17 @@ export function createGatewayWsServer(
     }
   }
 
-  function close(): void {
+  async function close(): Promise<void> {
     for (const ws of clients.values()) {
       ws.close(1001, "Server shutting down");
     }
     clients.clear();
-    wss.close();
+    await new Promise<void>((resolve, reject) => {
+      wss.close((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
   }
 
   function clientCount(): number {

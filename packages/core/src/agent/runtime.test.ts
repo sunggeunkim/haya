@@ -222,4 +222,90 @@ describe("AgentRuntime", () => {
 
     expect(chunks).toEqual(["Streamed response"]);
   });
+
+  it("stream callback fires even when content is empty string", async () => {
+    const provider = mockProvider([
+      {
+        message: { role: "assistant", content: "" },
+        finishReason: "stop",
+      },
+    ]);
+
+    const runtime = new AgentRuntime(provider, { defaultModel: "test" });
+
+    const events: { delta: string; done: boolean }[] = [];
+    await runtime.chat(
+      { sessionId: "s1", message: "Hi" },
+      [],
+      (chunk) => {
+        events.push({ delta: chunk.delta, done: chunk.done });
+      },
+    );
+
+    expect(events).toHaveLength(1);
+    expect(events[0].done).toBe(true);
+    expect(events[0].delta).toBe("");
+  });
+
+  it("per-request systemPrompt override", async () => {
+    let capturedMessages: Message[] = [];
+    const provider: AIProvider = {
+      name: "mock",
+      async complete(request: CompletionRequest): Promise<CompletionResponse> {
+        capturedMessages = request.messages;
+        return {
+          message: { role: "assistant", content: "OK" },
+          finishReason: "stop",
+        };
+      },
+    };
+
+    const runtime = new AgentRuntime(provider, {
+      defaultModel: "test",
+      systemPrompt: "Default system prompt",
+    });
+
+    await runtime.chat(
+      { sessionId: "s1", message: "Hi", systemPrompt: "Override prompt" },
+      [],
+    );
+
+    expect(capturedMessages[0]?.role).toBe("system");
+    expect(capturedMessages[0]?.content).toBe("Override prompt");
+  });
+
+  it("provider error propagation", async () => {
+    const provider: AIProvider = {
+      name: "mock",
+      async complete(): Promise<CompletionResponse> {
+        throw new Error("Provider unavailable");
+      },
+    };
+
+    const runtime = new AgentRuntime(provider, { defaultModel: "test" });
+
+    await expect(
+      runtime.chat({ sessionId: "s1", message: "Hi" }, []),
+    ).rejects.toThrow("Provider unavailable");
+  });
+
+  it("finishReason=tool_calls with empty toolCalls falls through", async () => {
+    const provider = mockProvider([
+      {
+        message: { role: "assistant", content: "No tools actually needed" },
+        finishReason: "tool_calls",
+        // toolCalls is undefined / empty
+      },
+    ]);
+
+    const runtime = new AgentRuntime(provider, { defaultModel: "test" });
+
+    const response = await runtime.chat(
+      { sessionId: "s1", message: "Hi" },
+      [],
+    );
+
+    // Should return a response instead of looping, since toolCalls is empty
+    expect(response.message.content).toBe("No tools actually needed");
+  });
 });

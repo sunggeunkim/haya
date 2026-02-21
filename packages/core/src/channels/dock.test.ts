@@ -220,9 +220,7 @@ describe("ChannelDock", () => {
     const result = await dock.startAll();
     expect(result.started).toEqual([]);
     expect(result.failed).toEqual([]);
-    expect(dock.isRunning).toBe(true);
-
-    await dock.stopAll();
+    // No channels started, so dock is not running
     expect(dock.isRunning).toBe(false);
   });
 
@@ -286,5 +284,57 @@ describe("ChannelDock", () => {
 
     // Should not throw — just logs a warning
     await capturedRuntime!.onMessage(testMessage);
+  });
+
+  it("isRunning is false when all channels fail", async () => {
+    const registry = new ChannelRegistry();
+    const failing1 = createTestChannel({
+      id: "broken-1",
+      name: "Broken 1",
+      start: vi.fn().mockRejectedValue(new Error("fail 1")),
+    });
+    const failing2 = createTestChannel({
+      id: "broken-2",
+      name: "Broken 2",
+      start: vi.fn().mockRejectedValue(new Error("fail 2")),
+    });
+    registry.register(failing1);
+    registry.register(failing2);
+
+    const dock = new ChannelDock(registry);
+    const result = await dock.startAll();
+
+    expect(result.started).toEqual([]);
+    expect(result.failed).toHaveLength(2);
+    expect(dock.isRunning).toBe(false);
+  });
+
+  it("startChannel with explicit ChannelConfig", async () => {
+    const registry = new ChannelRegistry();
+    const ch = createTestChannel({ id: "slack", name: "Slack" });
+    registry.register(ch);
+
+    const dock = new ChannelDock(registry);
+    const customConfig = { settings: { botTokenEnvVar: "CUSTOM_TOKEN" } };
+    await dock.startChannel("slack", customConfig);
+
+    const [config] = (ch.start as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(config).toEqual(customConfig);
+  });
+
+  it("restartChannel with custom config", async () => {
+    const registry = new ChannelRegistry();
+    const ch = createTestChannel({ id: "slack", name: "Slack" });
+    registry.register(ch);
+
+    const dock = new ChannelDock(registry);
+    await dock.startChannel("slack");
+
+    const customConfig = { settings: { botTokenEnvVar: "RESTART_TOKEN" } };
+    await dock.restartChannel("slack", customConfig);
+
+    // The restart start call is the second one (index 1)
+    const [config] = (ch.start as ReturnType<typeof vi.fn>).mock.calls[1];
+    expect(config).toEqual(customConfig);
   });
 });

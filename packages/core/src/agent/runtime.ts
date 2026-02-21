@@ -118,7 +118,7 @@ export class AgentRuntime {
       }
 
       // Final response — emit chunk if streaming
-      if (onChunk && response.message.content) {
+      if (onChunk) {
         onChunk({
           sessionId: request.sessionId,
           delta: response.message.content,

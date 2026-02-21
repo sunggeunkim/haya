@@ -42,6 +42,10 @@ export function createTeamsChannel(): ChannelPlugin {
   let connected = false;
   let connectedSince: number | undefined;
   let lastError: string | undefined;
+  let configAppId = "";
+
+  // Store serviceUrl and tenantId from inbound activities keyed by conversation ID
+  const conversationContext = new Map<string, { serviceUrl: string; tenantId: string }>();
 
   return {
     id: "teams",
@@ -58,6 +62,7 @@ export function createTeamsChannel(): ChannelPlugin {
       const appId = requireEnv(teamsConfig.appIdEnvVar);
       const appPassword = requireEnv(teamsConfig.appPasswordEnvVar);
       const tenantId = requireEnv(teamsConfig.tenantIdEnvVar);
+      configAppId = appId;
 
       const botAuth = new ConfigurationBotFrameworkAuthentication({
         MicrosoftAppId: appId,
@@ -87,6 +92,14 @@ export function createTeamsChannel(): ChannelPlugin {
 
             const conversationType =
               activity.conversation?.conversationType ?? "channel";
+
+            // Store serviceUrl and tenantId for outbound messages
+            if (activity.conversation?.id && activity.serviceUrl) {
+              conversationContext.set(activity.conversation.id, {
+                serviceUrl: activity.serviceUrl,
+                tenantId: activity.conversation.tenantId ?? "",
+              });
+            }
 
             // Wrap external content for prompt injection protection
             const wrapped = wrapExternalContent(activity.text, "teams");
@@ -161,13 +174,21 @@ export function createTeamsChannel(): ChannelPlugin {
         throw new Error("Teams channel is not connected");
       }
 
+      const ctx = conversationContext.get(channelId);
+      const serviceUrl = ctx?.serviceUrl ?? "";
+      const convTenantId = ctx?.tenantId ?? "";
+
+      if (!serviceUrl) {
+        throw new Error(`No serviceUrl stored for conversation "${channelId}". Cannot send proactive message before receiving an inbound message.`);
+      }
+
       const conversationRef: Partial<ConversationReference> = {
-        conversation: { id: channelId, isGroup: false, conversationType: "personal", tenantId: "", name: "" },
-        serviceUrl: "",
+        conversation: { id: channelId, isGroup: false, conversationType: "personal", tenantId: convTenantId, name: "" },
+        serviceUrl,
       };
 
       await adapter.continueConversationAsync(
-        "",
+        configAppId,
         conversationRef as ConversationReference,
         async (context: TurnContext) => {
           await context.sendActivity({ type: "message", text: message.content } as Partial<Activity>);

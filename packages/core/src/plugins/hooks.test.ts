@@ -127,4 +127,54 @@ describe("HookRegistry", () => {
     expect(handlerA).toHaveBeenCalledTimes(1);
     expect(handlerB).not.toHaveBeenCalled();
   });
+
+  it("register() with pluginId stores the plugin association", () => {
+    const registry = new HookRegistry();
+    const handler = vi.fn();
+
+    registry.register("test-event", handler, "my-plugin");
+
+    expect(registry.handlerCount("test-event")).toBe(1);
+  });
+
+  it("unregisterByPlugin() removes only that plugin's handlers", async () => {
+    const registry = new HookRegistry();
+    const handlerA = vi.fn();
+    const handlerB = vi.fn();
+
+    registry.register("shared-event", handlerA, "plugin-a");
+    registry.register("shared-event", handlerB, "plugin-b");
+
+    expect(registry.handlerCount("shared-event")).toBe(2);
+
+    registry.unregisterByPlugin("plugin-a");
+
+    expect(registry.handlerCount("shared-event")).toBe(1);
+
+    // plugin-b's handler should still work
+    await registry.dispatch("shared-event", { data: "test" });
+    expect(handlerA).not.toHaveBeenCalled();
+    expect(handlerB).toHaveBeenCalledTimes(1);
+    expect(handlerB).toHaveBeenCalledWith({ data: "test" });
+  });
+
+  it("handlers from other plugins unaffected after unregisterByPlugin", async () => {
+    const registry = new HookRegistry();
+    const handlerA1 = vi.fn();
+    const handlerA2 = vi.fn();
+    const handlerB = vi.fn();
+
+    registry.register("event-x", handlerA1, "plugin-a");
+    registry.register("event-y", handlerA2, "plugin-a");
+    registry.register("event-x", handlerB, "plugin-b");
+
+    registry.unregisterByPlugin("plugin-a");
+
+    expect(registry.handlerCount("event-x")).toBe(1);
+    expect(registry.handlerCount("event-y")).toBe(0);
+
+    await registry.dispatch("event-x", { val: 1 });
+    expect(handlerA1).not.toHaveBeenCalled();
+    expect(handlerB).toHaveBeenCalledWith({ val: 1 });
+  });
 });

@@ -167,3 +167,51 @@ describe("validatePluginPermissions", () => {
     expect(result.errors.length).toBeGreaterThanOrEqual(3);
   });
 });
+
+describe("createSandboxedWorker", () => {
+  it("returned object has the correct interface methods", async () => {
+    const { createSandboxedWorker } = await import("./plugin-sandbox.js");
+    const { fileURLToPath } = await import("node:url");
+    const __filename = fileURLToPath(import.meta.url);
+
+    const sandboxed = createSandboxedWorker({
+      pluginPath: __filename,
+      pluginId: "test-plugin",
+    });
+
+    try {
+      expect(sandboxed).toHaveProperty("send");
+      expect(sandboxed).toHaveProperty("onMessage");
+      expect(sandboxed).toHaveProperty("onError");
+      expect(sandboxed).toHaveProperty("terminate");
+      expect(sandboxed).toHaveProperty("pluginId");
+      expect(sandboxed).toHaveProperty("worker");
+      expect(typeof sandboxed.send).toBe("function");
+      expect(typeof sandboxed.onMessage).toBe("function");
+      expect(typeof sandboxed.onError).toBe("function");
+      expect(typeof sandboxed.terminate).toBe("function");
+      expect(sandboxed.pluginId).toBe("test-plugin");
+    } finally {
+      await sandboxed.terminate();
+    }
+  });
+
+  it("onError handler is callable", async () => {
+    const { createSandboxedWorker } = await import("./plugin-sandbox.js");
+    const { fileURLToPath } = await import("node:url");
+    const __filename = fileURLToPath(import.meta.url);
+
+    const sandboxed = createSandboxedWorker({
+      pluginPath: __filename,
+      pluginId: "error-test-plugin",
+    });
+
+    try {
+      // Verify onError can be called with a handler without throwing
+      const handler = (_err: Error) => {};
+      expect(() => sandboxed.onError(handler)).not.toThrow();
+    } finally {
+      await sandboxed.terminate();
+    }
+  });
+});

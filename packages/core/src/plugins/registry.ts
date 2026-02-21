@@ -40,12 +40,6 @@ export class PluginRegistry {
     // Validate plugin definition
     const errors = validatePluginDefinition(definition);
     if (errors.length > 0) {
-      const entry: LoadedPlugin = {
-        definition,
-        status: "failed",
-        error: errors.join("; "),
-      };
-      this.plugins.set(definition.id, entry);
       throw new Error(
         `Invalid plugin "${definition.id}": ${errors.join("; ")}`,
       );
@@ -87,6 +81,9 @@ export class PluginRegistry {
         this.toolRegistry.unregister(tool.name);
       }
     }
+
+    // Remove hooks registered by this plugin
+    this.hookRegistry.unregisterByPlugin(pluginId);
 
     entry.status = "unloaded";
     this.plugins.delete(pluginId);
@@ -162,7 +159,7 @@ export class PluginRegistry {
       },
 
       registerHook(event: string, handler): void {
-        hookRegistry.register(event, handler);
+        hookRegistry.register(event, handler, pluginId);
         pluginLogger.info(`Registered hook: ${event}`);
       },
 

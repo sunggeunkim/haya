@@ -3,22 +3,29 @@ import { createLogger } from "../infra/logger.js";
 
 const log = createLogger("hooks");
 
+interface RegisteredHandler {
+  handler: HookHandler;
+  pluginId?: string;
+}
+
 /**
  * Hook dispatch system. Plugins register handlers for named events.
  * When an event is dispatched, all registered handlers are called in order.
  */
 export class HookRegistry {
-  private readonly handlers = new Map<string, HookHandler[]>();
+  private readonly handlers = new Map<string, RegisteredHandler[]>();
 
   /**
    * Register a handler for the given event name.
+   * Optionally associate it with a pluginId for scoped cleanup.
    */
-  register(event: string, handler: HookHandler): void {
+  register(event: string, handler: HookHandler, pluginId?: string): void {
+    const entry: RegisteredHandler = { handler, pluginId };
     const list = this.handlers.get(event);
     if (list) {
-      list.push(handler);
+      list.push(entry);
     } else {
-      this.handlers.set(event, [handler]);
+      this.handlers.set(event, [entry]);
     }
   }
 
@@ -27,6 +34,20 @@ export class HookRegistry {
    */
   unregisterAll(event: string): void {
     this.handlers.delete(event);
+  }
+
+  /**
+   * Unregister all handlers registered by a specific plugin.
+   */
+  unregisterByPlugin(pluginId: string): void {
+    for (const [event, list] of this.handlers.entries()) {
+      const filtered = list.filter((entry) => entry.pluginId !== pluginId);
+      if (filtered.length === 0) {
+        this.handlers.delete(event);
+      } else {
+        this.handlers.set(event, filtered);
+      }
+    }
   }
 
   /**
@@ -41,9 +62,9 @@ export class HookRegistry {
     const list = this.handlers.get(event);
     if (!list || list.length === 0) return;
 
-    for (const handler of list) {
+    for (const entry of list) {
       try {
-        await handler(payload);
+        await entry.handler(payload);
       } catch (err) {
         log.warn(
           `Hook handler for "${event}" threw: ${err instanceof Error ? err.message : String(err)}`,

@@ -143,10 +143,15 @@ function createAnthropicProvider(config: ProviderConfig): AIProvider {
         ...(systemMessages.length > 0 && {
           system: systemMessages.map((m) => m.content).join("\n\n"),
         }),
-        messages: nonSystemMessages.map((m) => ({
-          role: m.role === "tool" ? "user" : m.role,
-          content: m.content,
-        })),
+        messages: nonSystemMessages.map((m) => {
+          if (m.role === "tool") {
+            return {
+              role: "user" as const,
+              content: [{ type: "tool_result", tool_use_id: m.toolCallId, content: m.content }],
+            };
+          }
+          return { role: m.role, content: m.content };
+        }),
         ...(request.temperature !== undefined && {
           temperature: request.temperature,
         }),

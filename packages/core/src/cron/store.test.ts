@@ -263,4 +263,38 @@ describe("CronStore", () => {
 
     expect(store.remove("nonexistent")).toBe(false);
   });
+
+  it("dynamic job added via add() is persisted after save()", async () => {
+    const store = new CronStore(storePath);
+    await store.load([]);
+
+    store.add({
+      name: "dynamic-persist",
+      schedule: "*/10 * * * *",
+      action: "persist-task",
+    });
+    await store.save();
+
+    const content = await readFile(storePath, "utf-8");
+    const data = JSON.parse(content);
+    const savedJob = data.jobs.find(
+      (j: { name: string }) => j.name === "dynamic-persist",
+    );
+    expect(savedJob).toBeDefined();
+    expect(savedJob.schedule).toBe("*/10 * * * *");
+    expect(savedJob.action).toBe("persist-task");
+  });
+
+  it("load() with empty configJobs starts fresh even if store file exists", async () => {
+    const store = new CronStore(storePath);
+    await store.load(testJobs);
+    await store.save();
+
+    // Create a new store pointing to the same file
+    const store2 = new CronStore(storePath);
+    await store2.load([]);
+
+    expect(store2.size).toBe(0);
+    expect(store2.list()).toEqual([]);
+  });
 });

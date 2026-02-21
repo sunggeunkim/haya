@@ -249,4 +249,41 @@ describe("PluginRegistry", () => {
     expect(typeof logger.error).toBe("function");
     expect(typeof logger.debug).toBe("function");
   });
+
+  it("re-registering same ID after validation failure works", async () => {
+    const registry = new PluginRegistry();
+
+    // First attempt: empty name should fail validation
+    const badPlugin = createTestPlugin({ id: "retry-plugin", name: "" });
+    await expect(registry.register(badPlugin)).rejects.toThrow("Plugin name");
+
+    // Second attempt: valid definition with same ID should succeed
+    const goodPlugin = createTestPlugin({
+      id: "retry-plugin",
+      name: "Retry Plugin",
+    });
+    await registry.register(goodPlugin);
+
+    expect(registry.has("retry-plugin")).toBe(true);
+    expect(registry.get("retry-plugin")?.status).toBe("registered");
+  });
+
+  it("unregister() removes hooks registered by the plugin", async () => {
+    const hookRegistry = new HookRegistry();
+    const registry = new PluginRegistry(hookRegistry);
+
+    const handler = vi.fn();
+    const plugin = createTestPlugin({
+      id: "hook-plugin",
+      register: (api) => {
+        api.registerHook("on-message", handler);
+      },
+    });
+
+    await registry.register(plugin);
+    expect(hookRegistry.handlerCount("on-message")).toBe(1);
+
+    registry.unregister("hook-plugin");
+    expect(hookRegistry.handlerCount("on-message")).toBe(0);
+  });
 });
