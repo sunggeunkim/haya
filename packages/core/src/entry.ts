@@ -187,7 +187,7 @@ program
       // Register web search tools
       if (config.tools?.webSearch) {
         const { createSearchTools } = await import("./agent/search-tools.js");
-        for (const tool of createSearchTools(config.tools.webSearch.apiKeyEnvVar)) {
+        for (const tool of createSearchTools(config.tools.webSearch)) {
           agentRuntime.tools.register(tool);
         }
         log.info("Web search tools registered");

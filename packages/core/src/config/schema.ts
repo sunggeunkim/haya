@@ -60,8 +60,9 @@ export const GoogleConfigSchema = z.object({
 });
 
 export const WebSearchConfigSchema = z.object({
-  provider: z.enum(["brave"]),
+  provider: z.enum(["brave", "google"]),
   apiKeyEnvVar: z.string(),
+  searchEngineId: z.string().optional(),
 });
 
 export const ImageGenerationConfigSchema = z.object({
