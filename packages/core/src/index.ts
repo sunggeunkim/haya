@@ -164,6 +164,16 @@ export { createVisionTools } from "./agent/vision-tools.js";
 export { createAutoReplyTools } from "./agent/auto-reply-tools.js";
 export { createLinkTools } from "./agent/link-tools.js";
 export { createGeminiProvider } from "./agent/gemini.js";
+export { createCodeEvalTools } from "./agent/code-eval-tools.js";
+export { createDataTools } from "./agent/data-tools.js";
+export { createHashTools } from "./agent/hash-tools.js";
+export { createWeatherTools } from "./agent/weather-tools.js";
+export { createHttpTools } from "./agent/http-tools.js";
+export { createSystemTools } from "./agent/system-tools.js";
+export { createPdfTools } from "./agent/pdf-tools.js";
+export { createArchiveTools } from "./agent/archive-tools.js";
+export { createAudioTools } from "./agent/audio-tools.js";
+export { createQrTools } from "./agent/qr-tools.js";
 
 // Google OAuth
 export { GoogleAuth, callGoogleApi, callGoogleApiText } from "./google/auth.js";

@@ -281,6 +281,97 @@ program
         log.info("Link preview tools registered");
       }
 
+      // Register code evaluation tools
+      {
+        const { createCodeEvalTools } = await import("./agent/code-eval-tools.js");
+        for (const tool of createCodeEvalTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Code eval tools registered");
+      }
+
+      // Register data conversion & diff tools
+      {
+        const { createDataTools } = await import("./agent/data-tools.js");
+        for (const tool of createDataTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Data tools registered");
+      }
+
+      // Register hash/encoding tools
+      {
+        const { createHashTools } = await import("./agent/hash-tools.js");
+        for (const tool of createHashTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Hash tools registered");
+      }
+
+      // Register weather tools (Open-Meteo, no API key needed)
+      {
+        const { createWeatherTools } = await import("./agent/weather-tools.js");
+        for (const tool of createWeatherTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Weather tools registered");
+      }
+
+      // Register HTTP request tools
+      {
+        const { createHttpTools } = await import("./agent/http-tools.js");
+        for (const tool of createHttpTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("HTTP tools registered");
+      }
+
+      // Register system tools (clipboard, screenshot, notify, system_info)
+      {
+        const { createSystemTools } = await import("./agent/system-tools.js");
+        for (const tool of createSystemTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("System tools registered");
+      }
+
+      // Register PDF/document extraction tools
+      {
+        const { createPdfTools } = await import("./agent/pdf-tools.js");
+        for (const tool of createPdfTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("PDF tools registered");
+      }
+
+      // Register archive tools
+      {
+        const { createArchiveTools } = await import("./agent/archive-tools.js");
+        for (const tool of createArchiveTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Archive tools registered");
+      }
+
+      // Register QR code tools
+      {
+        const { createQrTools } = await import("./agent/qr-tools.js");
+        for (const tool of createQrTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("QR code tools registered");
+      }
+
+      // Register audio transcription tools (requires OpenAI API key)
+      if (config.agent.defaultProviderApiKeyEnvVar || process.env.OPENAI_API_KEY) {
+        const { createAudioTools } = await import("./agent/audio-tools.js");
+        const audioKeyEnvVar = config.agent.defaultProviderApiKeyEnvVar ?? "OPENAI_API_KEY";
+        for (const tool of createAudioTools(audioKeyEnvVar)) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Audio transcription tools registered");
+      }
+
       // Register vision/image analysis tools
       {
         const { createVisionTools } = await import("./agent/vision-tools.js");

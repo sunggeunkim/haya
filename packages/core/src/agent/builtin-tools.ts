@@ -448,6 +448,23 @@ export const defaultToolPolicies = [
   { toolName: "auto_reply_list", level: "allow" as PolicyLevel },
   { toolName: "auto_reply_remove", level: "confirm" as PolicyLevel },
   { toolName: "image_analyze", level: "allow" as PolicyLevel },
+  { toolName: "code_eval", level: "confirm" as PolicyLevel },
+  { toolName: "data_convert", level: "allow" as PolicyLevel },
+  { toolName: "text_diff", level: "allow" as PolicyLevel },
+  { toolName: "hash_encode", level: "allow" as PolicyLevel },
+  { toolName: "weather", level: "allow" as PolicyLevel },
+  { toolName: "http_request", level: "confirm" as PolicyLevel },
+  { toolName: "clipboard_read", level: "confirm" as PolicyLevel },
+  { toolName: "clipboard_write", level: "confirm" as PolicyLevel },
+  { toolName: "screenshot", level: "confirm" as PolicyLevel },
+  { toolName: "notify", level: "allow" as PolicyLevel },
+  { toolName: "system_info", level: "allow" as PolicyLevel },
+  { toolName: "pdf_extract", level: "allow" as PolicyLevel },
+  { toolName: "archive_create", level: "confirm" as PolicyLevel },
+  { toolName: "archive_extract", level: "confirm" as PolicyLevel },
+  { toolName: "audio_transcribe", level: "confirm" as PolicyLevel },
+  { toolName: "qr_generate", level: "allow" as PolicyLevel },
+  { toolName: "qr_decode", level: "allow" as PolicyLevel },
 ];
 
 /** All built-in tools (excludes session tools which need runtime config). */
@@ -472,3 +489,13 @@ export { createVisionTools } from "./vision-tools.js";
 export { createAutoReplyTools } from "./auto-reply-tools.js";
 export { createLinkTools } from "./link-tools.js";
 export { createGeminiProvider } from "./gemini.js";
+export { createCodeEvalTools } from "./code-eval-tools.js";
+export { createDataTools } from "./data-tools.js";
+export { createHashTools } from "./hash-tools.js";
+export { createWeatherTools } from "./weather-tools.js";
+export { createHttpTools } from "./http-tools.js";
+export { createSystemTools } from "./system-tools.js";
+export { createPdfTools } from "./pdf-tools.js";
+export { createArchiveTools } from "./archive-tools.js";
+export { createAudioTools } from "./audio-tools.js";
+export { createQrTools } from "./qr-tools.js";
