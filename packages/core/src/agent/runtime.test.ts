@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { AIProvider } from "./providers.js";
 import { AgentRuntime } from "./runtime.js";
 import { ToolRegistry } from "./tools.js";
-import type { CompletionRequest, CompletionResponse, Message } from "./types.js";
+import type {
+  ChatChunkEvent,
+  CompletionRequest,
+  CompletionResponse,
+  Message,
+  StreamDelta,
+} from "./types.js";
 
 function mockProvider(responses: CompletionResponse[]): AIProvider {
   let callIndex = 0;
@@ -307,5 +313,184 @@ describe("AgentRuntime", () => {
 
     // Should return a response instead of looping, since toolCalls is empty
     expect(response.message.content).toBe("No tools actually needed");
+  });
+
+  it("rejects when budget enforcer throws", async () => {
+    const provider = mockProvider([
+      {
+        message: { role: "assistant", content: "OK" },
+        finishReason: "stop",
+      },
+    ]);
+
+    const budgetEnforcer = {
+      enforce(_sessionId: string): void {
+        throw new Error("Budget exceeded");
+      },
+    };
+
+    const runtime = new AgentRuntime(
+      provider,
+      { defaultModel: "test" },
+      { budgetEnforcer: budgetEnforcer as import("../sessions/budget.js").BudgetEnforcer },
+    );
+
+    await expect(
+      runtime.chat({ sessionId: "s1", message: "Hi" }, []),
+    ).rejects.toThrow("Budget exceeded");
+  });
+
+  it("uses completeStream() when onChunk callback is provided and provider supports it", async () => {
+    let completeStreamCalled = false;
+    let completeCalled = false;
+
+    async function* mockStream(): AsyncGenerator<StreamDelta, CompletionResponse> {
+      yield { content: "chunk1" };
+      yield { content: "chunk2" };
+      return {
+        message: { role: "assistant" as const, content: "chunk1chunk2" },
+        finishReason: "stop" as const,
+      };
+    }
+
+    const provider: AIProvider = {
+      name: "mock-stream",
+      async complete(_request: CompletionRequest): Promise<CompletionResponse> {
+        completeCalled = true;
+        return {
+          message: { role: "assistant", content: "non-stream" },
+          finishReason: "stop",
+        };
+      },
+      completeStream(_request: CompletionRequest): AsyncGenerator<StreamDelta, CompletionResponse> {
+        completeStreamCalled = true;
+        return mockStream();
+      },
+    };
+
+    const runtime = new AgentRuntime(provider, { defaultModel: "test" });
+
+    const events: ChatChunkEvent[] = [];
+    const response = await runtime.chat(
+      { sessionId: "s1", message: "Hi" },
+      [],
+      (chunk) => {
+        events.push({ ...chunk });
+      },
+    );
+
+    expect(completeStreamCalled).toBe(true);
+    expect(completeCalled).toBe(false);
+
+    // Should have received two stream deltas plus the final done event
+    expect(events).toHaveLength(3);
+    expect(events[0]).toEqual({ sessionId: "s1", delta: "chunk1", done: false });
+    expect(events[1]).toEqual({ sessionId: "s1", delta: "chunk2", done: false });
+    expect(events[2]).toEqual({ sessionId: "s1", delta: "chunk1chunk2", done: true });
+
+    expect(response.message.content).toBe("chunk1chunk2");
+  });
+
+  it("streaming works through tool-call loop", async () => {
+    let callCount = 0;
+    let toolExecuted = false;
+
+    async function* toolCallStream(): AsyncGenerator<StreamDelta, CompletionResponse> {
+      yield { content: "" };
+      return {
+        message: {
+          role: "assistant" as const,
+          content: "",
+          toolCalls: [
+            { id: "tc-1", name: "echo_tool", arguments: '{"text":"hello"}' },
+          ],
+        },
+        finishReason: "tool_calls" as const,
+      };
+    }
+
+    async function* finalStream(): AsyncGenerator<StreamDelta, CompletionResponse> {
+      yield { content: "final " };
+      yield { content: "answer" };
+      return {
+        message: { role: "assistant" as const, content: "final answer" },
+        finishReason: "stop" as const,
+      };
+    }
+
+    const provider: AIProvider = {
+      name: "mock-stream-tools",
+      async complete(): Promise<CompletionResponse> {
+        throw new Error("complete() should not be called");
+      },
+      completeStream(_request: CompletionRequest): AsyncGenerator<StreamDelta, CompletionResponse> {
+        callCount++;
+        if (callCount === 1) {
+          return toolCallStream();
+        }
+        return finalStream();
+      },
+    };
+
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "echo_tool",
+      description: "Echoes text",
+      parameters: { type: "object", properties: { text: { type: "string" } } },
+      execute: async (args) => {
+        toolExecuted = true;
+        return `Echo: ${(args as Record<string, string>).text}`;
+      },
+    });
+
+    const runtime = new AgentRuntime(provider, { defaultModel: "test" }, { tools });
+
+    const events: ChatChunkEvent[] = [];
+    const response = await runtime.chat(
+      { sessionId: "s1", message: "Echo something" },
+      [],
+      (chunk) => {
+        events.push({ ...chunk });
+      },
+    );
+
+    expect(toolExecuted).toBe(true);
+    expect(response.message.content).toBe("final answer");
+
+    // The final stream yields "final " and "answer", plus the done event
+    const contentEvents = events.filter((e) => !e.done && e.delta);
+    expect(contentEvents).toHaveLength(2);
+    expect(contentEvents[0].delta).toBe("final ");
+    expect(contentEvents[1].delta).toBe("answer");
+
+    const doneEvent = events.find((e) => e.done);
+    expect(doneEvent).toBeDefined();
+    expect(doneEvent!.delta).toBe("final answer");
+  });
+
+  it("updateSystemPrompt() changes prompt for subsequent calls", async () => {
+    let capturedMessages: Message[] = [];
+    const provider: AIProvider = {
+      name: "mock",
+      async complete(request: CompletionRequest): Promise<CompletionResponse> {
+        capturedMessages = request.messages;
+        return {
+          message: { role: "assistant", content: "OK" },
+          finishReason: "stop",
+        };
+      },
+    };
+
+    const runtime = new AgentRuntime(provider, {
+      defaultModel: "test",
+      systemPrompt: "Original",
+    });
+
+    runtime.updateSystemPrompt("Updated");
+
+    await runtime.chat({ sessionId: "s1", message: "Hi" }, []);
+
+    expect(capturedMessages[0]?.role).toBe("system");
+    expect(capturedMessages[0]?.content).toBe("Updated");
   });
 });

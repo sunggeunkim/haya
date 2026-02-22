@@ -80,6 +80,7 @@ The server can push events at any time:
 | -32603 | INTERNAL_ERROR | Server error |
 | -32000 | AUTH_REQUIRED | Authentication failed |
 | -32001 | RATE_LIMITED | Too many requests |
+| -32001 | BUDGET_EXCEEDED | Token or request budget exceeded (HTTP 429) |
 
 ## Methods
 
@@ -95,6 +96,27 @@ Send a message and get an AI response.
 | `message` | string | Yes | User message content |
 | `model` | string | No | Override the default AI model |
 | `systemPrompt` | string | No | Override the system prompt |
+
+**Streaming:** While the AI generates its response, the server pushes `chat.delta` events over the WebSocket so clients can display partial output in real time. Each delta event has this format:
+
+```json
+{
+  "event": "chat.delta",
+  "data": {
+    "sessionId": "abc123",
+    "delta": "Hello",
+    "done": false
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sessionId` | string | The session this delta belongs to |
+| `delta` | string | Incremental text fragment |
+| `done` | boolean | `true` on the final chunk, `false` otherwise |
+
+Deltas are best-effort; the final complete response is always returned as the standard RPC response frame below.
 
 **Result:**
 
@@ -113,6 +135,30 @@ Send a message and get an AI response.
   }
 }
 ```
+
+**Errors:** If the session has exceeded its configured budget limits, the server returns a `BudgetExceededError` instead of a response. This maps to HTTP status 429 and the standard RPC error format:
+
+```json
+{
+  "id": "request-id",
+  "error": {
+    "code": -32001,
+    "message": "Daily token budget exceeded: 50000 >= 50000"
+  }
+}
+```
+
+Budget limits are configured under `sessions.budgets` in `haya.config.yaml`:
+
+```yaml
+sessions:
+  budgets:
+    maxTokensPerSession: 100000
+    maxTokensPerDay: 500000
+    maxRequestsPerDay: 1000
+```
+
+All three limits are optional; omit any to leave that dimension uncapped.
 
 ### sessions.list
 
@@ -338,3 +384,19 @@ GET /health
 ```
 
 Returns `200 OK` when the gateway is running. Used by Docker HEALTHCHECK.
+
+## Web chat UI
+
+The gateway serves a built-in web chat interface at:
+
+```
+http://localhost:18789/chat
+```
+
+Pass authentication via the `token` query parameter:
+
+```
+http://localhost:18789/chat?token=<your-token>
+```
+
+The web UI connects to the WebSocket endpoint using the provided token, creates a client-side session, and renders messages in real time using `chat.delta` streaming events. It requires no external assets -- all HTML, CSS, and JavaScript are served inline from a single endpoint. The UI features auto-reconnect with exponential backoff and a connection status indicator.

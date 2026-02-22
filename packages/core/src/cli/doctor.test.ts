@@ -398,3 +398,90 @@ describe("formatDoctorResults", () => {
     expect(output).toContain("All checks passed.");
   });
 });
+
+describe("runDoctorChecks — Bedrock provider", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it("passes env check when Bedrock provider with AWS_ACCESS_KEY_ID set", async () => {
+    mockExistsSync.mockImplementation((path) => {
+      if (String(path) === "haya.json") return true;
+      if (String(path) === "sessions") return false;
+      return false;
+    });
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({ agent: { defaultProvider: "bedrock" } }),
+    );
+    mockExecFileSync.mockReturnValue(
+      "Filesystem     1B-blocks  Used Available Use% Mounted on\n/dev/sda1 500000000000 100000000000 400000000000  25% /\n",
+    );
+
+    vi.stubEnv("AWS_ACCESS_KEY_ID", "AKIA1234567890EXAMPLE");
+
+    const report = await runDoctorChecks("haya.json");
+
+    const envCheck = report.checks.find(
+      (c) => c.name === "Environment variables",
+    );
+    expect(envCheck).toBeDefined();
+    expect(envCheck!.status).toBe("pass");
+    expect(envCheck!.message).toContain("AWS_ACCESS_KEY_ID");
+  });
+
+  it("passes env check when Bedrock provider with AWS_PROFILE set", async () => {
+    mockExistsSync.mockImplementation((path) => {
+      if (String(path) === "haya.json") return true;
+      if (String(path) === "sessions") return false;
+      return false;
+    });
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({ agent: { defaultProvider: "bedrock" } }),
+    );
+    mockExecFileSync.mockReturnValue(
+      "Filesystem     1B-blocks  Used Available Use% Mounted on\n/dev/sda1 500000000000 100000000000 400000000000  25% /\n",
+    );
+
+    vi.stubEnv("AWS_PROFILE", "my-profile");
+
+    const report = await runDoctorChecks("haya.json");
+
+    const envCheck = report.checks.find(
+      (c) => c.name === "Environment variables",
+    );
+    expect(envCheck).toBeDefined();
+    expect(envCheck!.status).toBe("pass");
+    expect(envCheck!.message).toContain("AWS_PROFILE");
+  });
+
+  it("warns when Bedrock provider has no AWS credentials", async () => {
+    mockExistsSync.mockImplementation((path) => {
+      if (String(path) === "haya.json") return true;
+      if (String(path) === "sessions") return false;
+      return false;
+    });
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({ agent: { defaultProvider: "bedrock" } }),
+    );
+    mockExecFileSync.mockReturnValue(
+      "Filesystem     1B-blocks  Used Available Use% Mounted on\n/dev/sda1 500000000000 100000000000 400000000000  25% /\n",
+    );
+
+    delete process.env.AWS_ACCESS_KEY_ID;
+    delete process.env.AWS_PROFILE;
+
+    const report = await runDoctorChecks("haya.json");
+
+    const envCheck = report.checks.find(
+      (c) => c.name === "Environment variables",
+    );
+    expect(envCheck).toBeDefined();
+    expect(envCheck!.status).toBe("warn");
+    expect(envCheck!.message).toContain("IAM role");
+  });
+});

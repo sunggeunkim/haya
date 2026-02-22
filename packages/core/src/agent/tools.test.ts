@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ToolRegistry } from "./tools.js";
+import { ToolPolicyEngine } from "./tool-policy.js";
 import type { AgentTool, ToolCall } from "./types.js";
 
 function makeTool(name: string, result: string = "ok"): AgentTool {
@@ -132,5 +133,68 @@ describe("ToolRegistry.executeAll", () => {
     expect(results).toHaveLength(2);
     expect(results[0]?.content).toBe("result-a");
     expect(results[1]?.content).toBe("result-b");
+  });
+});
+
+describe("ToolRegistry with policy engine", () => {
+  it("setPolicyEngine() and getPolicyEngine()", () => {
+    const registry = new ToolRegistry();
+    expect(registry.getPolicyEngine()).toBeNull();
+
+    const engine = new ToolPolicyEngine([]);
+    registry.setPolicyEngine(engine);
+    expect(registry.getPolicyEngine()).toBe(engine);
+  });
+
+  it("execute() returns error when policy denies the tool", async () => {
+    const engine = new ToolPolicyEngine([
+      { toolName: "dangerous", level: "deny" },
+    ]);
+    const registry = new ToolRegistry();
+    registry.setPolicyEngine(engine);
+    registry.register(makeTool("dangerous"));
+
+    const call: ToolCall = {
+      id: "policy-deny-1",
+      name: "dangerous",
+      arguments: "{}",
+    };
+    const result = await registry.execute(call);
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain("blocked by policy");
+  });
+
+  it("execute() succeeds when policy allows the tool", async () => {
+    const engine = new ToolPolicyEngine([
+      { toolName: "safe-tool", level: "allow" },
+    ]);
+    const registry = new ToolRegistry();
+    registry.setPolicyEngine(engine);
+    registry.register(makeTool("safe-tool", "safe-result"));
+
+    const call: ToolCall = {
+      id: "policy-allow-1",
+      name: "safe-tool",
+      arguments: "{}",
+    };
+    const result = await registry.execute(call);
+    expect(result.isError).toBeUndefined();
+    expect(result.content).toBe("safe-result");
+  });
+
+  it("execute() succeeds when no policy exists for the tool (default allow)", async () => {
+    const engine = new ToolPolicyEngine([]);
+    const registry = new ToolRegistry();
+    registry.setPolicyEngine(engine);
+    registry.register(makeTool("unlisted-tool", "unlisted-result"));
+
+    const call: ToolCall = {
+      id: "policy-default-1",
+      name: "unlisted-tool",
+      arguments: "{}",
+    };
+    const result = await registry.execute(call);
+    expect(result.isError).toBeUndefined();
+    expect(result.content).toBe("unlisted-result");
   });
 });

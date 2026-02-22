@@ -149,4 +149,33 @@ describe("AssistantConfigSchema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("defaults defaultProvider to openai when not specified", () => {
+    const result = AssistantConfigSchema.parse(validConfig);
+    expect(result.agent.defaultProvider).toBe("openai");
+  });
+
+  it("accepts config with defaultProvider set to bedrock", () => {
+    const result = AssistantConfigSchema.safeParse({
+      ...validConfig,
+      agent: {
+        defaultProvider: "bedrock",
+        defaultModel: "anthropic.claude-sonnet-4-20250514-v1:0",
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts config with awsRegion", () => {
+    const result = AssistantConfigSchema.parse({
+      ...validConfig,
+      agent: { ...validConfig.agent, awsRegion: "us-east-1" },
+    });
+    expect(result.agent.awsRegion).toBe("us-east-1");
+  });
+
+  it("awsRegion defaults to undefined when not specified", () => {
+    const result = AssistantConfigSchema.parse(validConfig);
+    expect(result.agent.awsRegion).toBeUndefined();
+  });
 });

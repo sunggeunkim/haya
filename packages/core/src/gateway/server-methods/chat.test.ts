@@ -83,6 +83,35 @@ describe("chat.send handler", () => {
     ).rejects.toThrow("Provider down");
   });
 
+  it("passes streaming callback to runtime.chat when send function is provided", async () => {
+    const chunkData = { sessionId: "s1", delta: "streaming...", done: false };
+    const runtime = mockRuntime({
+      chat: vi.fn().mockImplementation((_req, _history, onChunk) => {
+        if (typeof onChunk === "function") {
+          onChunk(chunkData);
+        }
+        return Promise.resolve({
+          sessionId: "s1",
+          message: { role: "assistant", content: "Hello!", timestamp: Date.now() },
+          usage: { promptTokens: 10, completionTokens: 5 },
+        });
+      }),
+    } as unknown as Partial<AgentRuntime>);
+    const history = mockHistory();
+    const handler = createChatSendHandler(runtime, history);
+
+    const send = vi.fn();
+    await handler({ sessionId: "s1", message: "Hi" }, "client-1", send);
+
+    // runtime.chat was called with 3 arguments (the third being the onChunk callback)
+    expect(runtime.chat).toHaveBeenCalledOnce();
+    expect(runtime.chat.mock.calls[0]).toHaveLength(3);
+    expect(typeof runtime.chat.mock.calls[0][2]).toBe("function");
+
+    // The send function was called with the event name and chunk data
+    expect(send).toHaveBeenCalledWith("chat.delta", chunkData);
+  });
+
   it("appends user message then assistant message to history", async () => {
     const addMessages = vi.fn();
     const runtime = mockRuntime();

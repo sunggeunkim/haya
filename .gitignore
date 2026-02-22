@@ -9,6 +9,7 @@ coverage/
 haya.json
 
 /sessions/
+/data/
 
 *.log
 *.pid

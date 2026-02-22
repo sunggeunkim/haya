@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AssistantConfig } from "./types.js";
 import { ConfigValidationError, validateConfig } from "./validation.js";
 
@@ -125,6 +125,117 @@ describe("validateConfig", () => {
         bind: "loopback",
         auth: { mode: "token", token: "a".repeat(64) },
         trustedProxies: ["::1", "fe80::1/64"],
+      },
+    });
+    expect(() => validateConfig(config)).not.toThrow();
+  });
+});
+
+describe("validateConfig — provider-specific validation", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("errors when bedrock provider has no awsRegion and no AWS_REGION env var", () => {
+    delete process.env.AWS_REGION;
+    delete process.env.AWS_DEFAULT_REGION;
+
+    const config = makeConfig({
+      agent: {
+        defaultProvider: "bedrock",
+        defaultModel: "anthropic.claude-sonnet-4-20250514-v1:0",
+        systemPrompt: "You are helpful.",
+        maxHistoryMessages: 100,
+        toolPolicies: [],
+      },
+    });
+    expect(() => validateConfig(config)).toThrow(ConfigValidationError);
+    expect(() => validateConfig(config)).toThrow(/AWS region/);
+  });
+
+  it("passes when bedrock provider has awsRegion in config", () => {
+    delete process.env.AWS_REGION;
+    delete process.env.AWS_DEFAULT_REGION;
+
+    const config = makeConfig({
+      agent: {
+        defaultProvider: "bedrock",
+        defaultModel: "anthropic.claude-sonnet-4-20250514-v1:0",
+        awsRegion: "us-east-1",
+        systemPrompt: "You are helpful.",
+        maxHistoryMessages: 100,
+        toolPolicies: [],
+      },
+    });
+    expect(() => validateConfig(config)).not.toThrow();
+  });
+
+  it("passes when bedrock provider has AWS_REGION env var", () => {
+    vi.stubEnv("AWS_REGION", "us-west-2");
+
+    const config = makeConfig({
+      agent: {
+        defaultProvider: "bedrock",
+        defaultModel: "anthropic.claude-sonnet-4-20250514-v1:0",
+        systemPrompt: "You are helpful.",
+        maxHistoryMessages: 100,
+        toolPolicies: [],
+      },
+    });
+    expect(() => validateConfig(config)).not.toThrow();
+  });
+
+  it("passes when bedrock provider has AWS_DEFAULT_REGION env var", () => {
+    vi.stubEnv("AWS_DEFAULT_REGION", "eu-west-1");
+
+    const config = makeConfig({
+      agent: {
+        defaultProvider: "bedrock",
+        defaultModel: "anthropic.claude-sonnet-4-20250514-v1:0",
+        systemPrompt: "You are helpful.",
+        maxHistoryMessages: 100,
+        toolPolicies: [],
+      },
+    });
+    expect(() => validateConfig(config)).not.toThrow();
+  });
+
+  it("errors when non-bedrock provider is missing defaultProviderApiKeyEnvVar", () => {
+    const config = makeConfig({
+      agent: {
+        defaultProvider: "openai",
+        defaultModel: "gpt-4o",
+        systemPrompt: "You are helpful.",
+        maxHistoryMessages: 100,
+        toolPolicies: [],
+      },
+    });
+    expect(() => validateConfig(config)).toThrow(ConfigValidationError);
+    expect(() => validateConfig(config)).toThrow(/defaultProviderApiKeyEnvVar/);
+  });
+
+  it("errors when provider defaults to openai and apiKeyEnvVar is missing", () => {
+    const config = makeConfig({
+      agent: {
+        defaultModel: "gpt-4o",
+        systemPrompt: "You are helpful.",
+        maxHistoryMessages: 100,
+        toolPolicies: [],
+      },
+    });
+    expect(() => validateConfig(config)).toThrow(ConfigValidationError);
+    expect(() => validateConfig(config)).toThrow(/requires agent.defaultProviderApiKeyEnvVar/);
+  });
+
+  it("passes when non-bedrock provider has defaultProviderApiKeyEnvVar set", () => {
+    const config = makeConfig({
+      agent: {
+        defaultProvider: "anthropic",
+        defaultModel: "claude-sonnet-4-20250514",
+        defaultProviderApiKeyEnvVar: "ANTHROPIC_API_KEY",
+        systemPrompt: "You are helpful.",
+        maxHistoryMessages: 100,
+        toolPolicies: [],
       },
     });
     expect(() => validateConfig(config)).not.toThrow();

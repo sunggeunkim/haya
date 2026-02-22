@@ -206,6 +206,205 @@ describe("createBedrockProvider", () => {
       }),
     ).rejects.toThrow(RetryableProviderError);
   });
+
+  it("retries on ServiceUnavailableException", async () => {
+    const err = new Error("Service unavailable");
+    err.name = "ServiceUnavailableException";
+    Object.assign(err, { $metadata: { httpStatusCode: 503 } });
+
+    mockSend
+      .mockRejectedValueOnce(err)
+      .mockResolvedValueOnce({
+        output: {
+          message: {
+            role: "assistant",
+            content: [{ text: "Recovered" }],
+          },
+        },
+        stopReason: "end_turn",
+      });
+
+    const provider = createBedrockProvider({
+      provider: "bedrock",
+      model: "anthropic.claude-sonnet-4-20250514-v1:0",
+      awsRegion: "us-east-1",
+      retryOptions: { maxRetries: 1, initialDelayMs: 10 },
+    });
+
+    const result = await provider.complete({
+      model: "anthropic.claude-sonnet-4-20250514-v1:0",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    expect(mockSend).toHaveBeenCalledTimes(2);
+    expect(result.message.content).toBe("Recovered");
+  });
+
+  it("retries on ModelTimeoutException", async () => {
+    const err = new Error("Model timeout");
+    err.name = "ModelTimeoutException";
+    Object.assign(err, { $metadata: { httpStatusCode: 408 } });
+
+    mockSend
+      .mockRejectedValueOnce(err)
+      .mockResolvedValueOnce({
+        output: {
+          message: {
+            role: "assistant",
+            content: [{ text: "Back online" }],
+          },
+        },
+        stopReason: "end_turn",
+      });
+
+    const provider = createBedrockProvider({
+      provider: "bedrock",
+      model: "anthropic.claude-sonnet-4-20250514-v1:0",
+      awsRegion: "us-east-1",
+      retryOptions: { maxRetries: 1, initialDelayMs: 10 },
+    });
+
+    const result = await provider.complete({
+      model: "anthropic.claude-sonnet-4-20250514-v1:0",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    expect(mockSend).toHaveBeenCalledTimes(2);
+    expect(result.message.content).toBe("Back online");
+  });
+
+  it("handles empty content response", async () => {
+    mockSend.mockResolvedValue({
+      output: {
+        message: {
+          role: "assistant",
+          content: [],
+        },
+      },
+      usage: { inputTokens: 3, outputTokens: 0 },
+      stopReason: "end_turn",
+    });
+
+    const provider = createBedrockProvider({
+      provider: "bedrock",
+      model: "anthropic.claude-sonnet-4-20250514-v1:0",
+      awsRegion: "us-east-1",
+    });
+
+    const result = await provider.complete({
+      model: "anthropic.claude-sonnet-4-20250514-v1:0",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    expect(result.message.content).toBe("");
+    expect(result.message.toolCalls).toBeUndefined();
+    expect(result.finishReason).toBe("stop");
+  });
+
+  it("sends toolConfig with correct structure when tools are provided", async () => {
+    mockSend.mockResolvedValue({
+      output: {
+        message: {
+          role: "assistant",
+          content: [{ text: "Sure, let me look that up." }],
+        },
+      },
+      usage: { inputTokens: 10, outputTokens: 5 },
+      stopReason: "end_turn",
+    });
+
+    const provider = createBedrockProvider({
+      provider: "bedrock",
+      model: "anthropic.claude-sonnet-4-20250514-v1:0",
+      awsRegion: "us-east-1",
+    });
+
+    await provider.complete({
+      model: "anthropic.claude-sonnet-4-20250514-v1:0",
+      messages: [{ role: "user", content: "What is the weather?" }],
+      tools: [
+        {
+          name: "get_weather",
+          description: "Get current weather for a city",
+          parameters: {
+            type: "object",
+            properties: { city: { type: "string" } },
+            required: ["city"],
+          },
+          execute: async () => "sunny",
+        },
+        {
+          name: "get_time",
+          description: "Get current time in a timezone",
+          parameters: {
+            type: "object",
+            properties: { tz: { type: "string" } },
+          },
+          execute: async () => "12:00",
+        },
+      ],
+    });
+
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    const command = mockSend.mock.calls[0][0];
+    const input = command.input;
+
+    expect(input.toolConfig).toBeDefined();
+    expect(input.toolConfig.tools).toHaveLength(2);
+
+    expect(input.toolConfig.tools[0]).toEqual({
+      toolSpec: {
+        name: "get_weather",
+        description: "Get current weather for a city",
+        inputSchema: {
+          json: {
+            type: "object",
+            properties: { city: { type: "string" } },
+            required: ["city"],
+          },
+        },
+      },
+    });
+
+    expect(input.toolConfig.tools[1]).toEqual({
+      toolSpec: {
+        name: "get_time",
+        description: "Get current time in a timezone",
+        inputSchema: {
+          json: {
+            type: "object",
+            properties: { tz: { type: "string" } },
+          },
+        },
+      },
+    });
+  });
+
+  it("returns undefined usage when response has no usage", async () => {
+    mockSend.mockResolvedValue({
+      output: {
+        message: {
+          role: "assistant",
+          content: [{ text: "No usage info" }],
+        },
+      },
+      stopReason: "end_turn",
+    });
+
+    const provider = createBedrockProvider({
+      provider: "bedrock",
+      model: "anthropic.claude-sonnet-4-20250514-v1:0",
+      awsRegion: "us-east-1",
+    });
+
+    const result = await provider.complete({
+      model: "anthropic.claude-sonnet-4-20250514-v1:0",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    expect(result.usage).toBeUndefined();
+    expect(result.message.content).toBe("No usage info");
+  });
 });
 
 describe("formatBedrockMessages", () => {

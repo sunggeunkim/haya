@@ -2,6 +2,21 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createProvider } from "./providers.js";
 import { ProviderHttpError, RetryableProviderError } from "./retry.js";
 
+/**
+ * Helper: builds a ReadableStream<Uint8Array> from an array of SSE-formatted strings.
+ * Each string should be a complete SSE event line (e.g. 'data: {"foo":"bar"}\n\n').
+ */
+function sseStream(events: string[]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const payload = events.join("");
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(payload));
+      controller.close();
+    },
+  });
+}
+
 describe("createProvider", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -322,5 +337,408 @@ describe("Anthropic complete()", () => {
         messages: [{ role: "user", content: "hi" }],
       }),
     ).rejects.toThrow(/500/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Streaming tests
+// ---------------------------------------------------------------------------
+
+/** Collect all yielded deltas and the final return value from an async generator. */
+async function collectStream(gen: AsyncGenerator<unknown, unknown>) {
+  const deltas: unknown[] = [];
+  let result: unknown;
+  while (true) {
+    const next = await gen.next();
+    if (next.done) {
+      result = next.value;
+      break;
+    }
+    deltas.push(next.value);
+  }
+  return { deltas, result };
+}
+
+describe("OpenAI completeStream()", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("yields text deltas correctly", async () => {
+    vi.stubEnv("TEST_OPENAI_KEY", "sk-test-123");
+
+    const body = sseStream([
+      `data: ${JSON.stringify({ choices: [{ delta: { content: "Hello" }, finish_reason: null }] })}\n\n`,
+      `data: ${JSON.stringify({ choices: [{ delta: { content: " world" }, finish_reason: null }] })}\n\n`,
+      `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "stop" }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(body, { status: 200 }),
+    );
+
+    const provider = createProvider({
+      provider: "openai",
+      model: "gpt-4o",
+      apiKeyEnvVar: "TEST_OPENAI_KEY",
+    });
+
+    const gen = provider.completeStream!({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    const { deltas, result } = await collectStream(gen);
+
+    // Should yield two text deltas
+    expect(deltas).toEqual([{ content: "Hello" }, { content: " world" }]);
+
+    // Final assembled message
+    const completion = result as { message: { content: string }; finishReason: string };
+    expect(completion.message.content).toBe("Hello world");
+    expect(completion.finishReason).toBe("stop");
+  });
+
+  it("accumulates tool calls from stream chunks", async () => {
+    vi.stubEnv("TEST_OPENAI_KEY", "sk-test-123");
+
+    const body = sseStream([
+      `data: ${JSON.stringify({
+        choices: [{
+          delta: {
+            tool_calls: [{ index: 0, id: "call_abc", function: { name: "get_weather", arguments: "" } }],
+          },
+          finish_reason: null,
+        }],
+      })}\n\n`,
+      `data: ${JSON.stringify({
+        choices: [{
+          delta: {
+            tool_calls: [{ index: 0, function: { arguments: '{"city"' } }],
+          },
+          finish_reason: null,
+        }],
+      })}\n\n`,
+      `data: ${JSON.stringify({
+        choices: [{
+          delta: {
+            tool_calls: [{ index: 0, function: { arguments: ':"SF"}' } }],
+          },
+          finish_reason: null,
+        }],
+      })}\n\n`,
+      `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "tool_calls" }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(body, { status: 200 }),
+    );
+
+    const provider = createProvider({
+      provider: "openai",
+      model: "gpt-4o",
+      apiKeyEnvVar: "TEST_OPENAI_KEY",
+    });
+
+    const gen = provider.completeStream!({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: "weather?" }],
+    });
+
+    const { result } = await collectStream(gen);
+    const completion = result as {
+      message: { toolCalls?: Array<{ id: string; name: string; arguments: string }> };
+      finishReason: string;
+    };
+
+    expect(completion.finishReason).toBe("tool_calls");
+    expect(completion.message.toolCalls).toHaveLength(1);
+    expect(completion.message.toolCalls![0].id).toBe("call_abc");
+    expect(completion.message.toolCalls![0].name).toBe("get_weather");
+    expect(completion.message.toolCalls![0].arguments).toBe('{"city":"SF"}');
+  });
+
+  it("captures usage from the final chunk", async () => {
+    vi.stubEnv("TEST_OPENAI_KEY", "sk-test-123");
+
+    const body = sseStream([
+      `data: ${JSON.stringify({ choices: [{ delta: { content: "Hi" }, finish_reason: null }] })}\n\n`,
+      `data: ${JSON.stringify({
+        choices: [{ delta: {}, finish_reason: "stop" }],
+        usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+      })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(body, { status: 200 }),
+    );
+
+    const provider = createProvider({
+      provider: "openai",
+      model: "gpt-4o",
+      apiKeyEnvVar: "TEST_OPENAI_KEY",
+    });
+
+    const gen = provider.completeStream!({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    const { result } = await collectStream(gen);
+    const completion = result as {
+      usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+    };
+
+    expect(completion.usage).toBeDefined();
+    expect(completion.usage!.promptTokens).toBe(10);
+    expect(completion.usage!.completionTokens).toBe(5);
+    expect(completion.usage!.totalTokens).toBe(15);
+  });
+
+  it("sets finish reason correctly for each reason type", async () => {
+    vi.stubEnv("TEST_OPENAI_KEY", "sk-test-123");
+
+    // Test "length" finish reason
+    const body = sseStream([
+      `data: ${JSON.stringify({ choices: [{ delta: { content: "truncated" }, finish_reason: null }] })}\n\n`,
+      `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "length" }] })}\n\n`,
+      "data: [DONE]\n\n",
+    ]);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(body, { status: 200 }),
+    );
+
+    const provider = createProvider({
+      provider: "openai",
+      model: "gpt-4o",
+      apiKeyEnvVar: "TEST_OPENAI_KEY",
+    });
+
+    const gen = provider.completeStream!({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: "write a long essay" }],
+    });
+
+    const { result } = await collectStream(gen);
+    const completion = result as { finishReason: string };
+    expect(completion.finishReason).toBe("length");
+  });
+});
+
+describe("Anthropic completeStream()", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("yields text deltas from content_block_delta events", async () => {
+    vi.stubEnv("TEST_ANTHROPIC_KEY", "sk-ant-test");
+
+    const body = sseStream([
+      `data: ${JSON.stringify({
+        type: "message_start",
+        message: { usage: { input_tokens: 8, output_tokens: 1 } },
+      })}\n\n`,
+      `data: ${JSON.stringify({
+        type: "content_block_start",
+        content_block: { type: "text" },
+      })}\n\n`,
+      `data: ${JSON.stringify({
+        type: "content_block_delta",
+        delta: { type: "text_delta", text: "Hello" },
+      })}\n\n`,
+      `data: ${JSON.stringify({
+        type: "content_block_delta",
+        delta: { type: "text_delta", text: " from Claude" },
+      })}\n\n`,
+      `data: ${JSON.stringify({
+        type: "message_delta",
+        delta: { stop_reason: "end_turn" },
+        usage: { output_tokens: 6 },
+      })}\n\n`,
+    ]);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(body, { status: 200 }),
+    );
+
+    const provider = createProvider({
+      provider: "anthropic",
+      model: "claude-opus-4-6",
+      apiKeyEnvVar: "TEST_ANTHROPIC_KEY",
+    });
+
+    const gen = provider.completeStream!({
+      model: "claude-opus-4-6",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    const { deltas, result } = await collectStream(gen);
+
+    expect(deltas).toEqual([{ content: "Hello" }, { content: " from Claude" }]);
+
+    const completion = result as { message: { content: string }; finishReason: string };
+    expect(completion.message.content).toBe("Hello from Claude");
+    expect(completion.finishReason).toBe("stop");
+  });
+
+  it("accumulates tool use blocks from stream", async () => {
+    vi.stubEnv("TEST_ANTHROPIC_KEY", "sk-ant-test");
+
+    const body = sseStream([
+      `data: ${JSON.stringify({
+        type: "message_start",
+        message: { usage: { input_tokens: 12, output_tokens: 1 } },
+      })}\n\n`,
+      `data: ${JSON.stringify({
+        type: "content_block_start",
+        content_block: { type: "tool_use", id: "tu_123", name: "get_weather" },
+      })}\n\n`,
+      `data: ${JSON.stringify({
+        type: "content_block_delta",
+        delta: { type: "input_json_delta", partial_json: '{"city"' },
+      })}\n\n`,
+      `data: ${JSON.stringify({
+        type: "content_block_delta",
+        delta: { type: "input_json_delta", partial_json: ':"SF"}' },
+      })}\n\n`,
+      `data: ${JSON.stringify({
+        type: "message_delta",
+        delta: { stop_reason: "tool_use" },
+        usage: { output_tokens: 20 },
+      })}\n\n`,
+    ]);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(body, { status: 200 }),
+    );
+
+    const provider = createProvider({
+      provider: "anthropic",
+      model: "claude-opus-4-6",
+      apiKeyEnvVar: "TEST_ANTHROPIC_KEY",
+    });
+
+    const gen = provider.completeStream!({
+      model: "claude-opus-4-6",
+      messages: [{ role: "user", content: "weather?" }],
+    });
+
+    const { deltas, result } = await collectStream(gen);
+
+    // No text deltas should be yielded for pure tool use
+    expect(deltas).toHaveLength(0);
+
+    const completion = result as {
+      message: { toolCalls?: Array<{ id: string; name: string; arguments: string }> };
+      finishReason: string;
+    };
+
+    expect(completion.finishReason).toBe("tool_calls");
+    expect(completion.message.toolCalls).toHaveLength(1);
+    expect(completion.message.toolCalls![0].id).toBe("tu_123");
+    expect(completion.message.toolCalls![0].name).toBe("get_weather");
+    expect(completion.message.toolCalls![0].arguments).toBe('{"city":"SF"}');
+  });
+
+  it("extracts system messages in streaming mode too", async () => {
+    vi.stubEnv("TEST_ANTHROPIC_KEY", "sk-ant-test");
+
+    const body = sseStream([
+      `data: ${JSON.stringify({
+        type: "message_start",
+        message: { usage: { input_tokens: 15, output_tokens: 1 } },
+      })}\n\n`,
+      `data: ${JSON.stringify({
+        type: "content_block_delta",
+        delta: { type: "text_delta", text: "I am helpful." },
+      })}\n\n`,
+      `data: ${JSON.stringify({
+        type: "message_delta",
+        delta: { stop_reason: "end_turn" },
+        usage: { output_tokens: 4 },
+      })}\n\n`,
+    ]);
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(body, { status: 200 }),
+    );
+
+    const provider = createProvider({
+      provider: "anthropic",
+      model: "claude-opus-4-6",
+      apiKeyEnvVar: "TEST_ANTHROPIC_KEY",
+    });
+
+    const gen = provider.completeStream!({
+      model: "claude-opus-4-6",
+      messages: [
+        { role: "system", content: "You are helpful." },
+        { role: "user", content: "hi" },
+      ],
+    });
+
+    await collectStream(gen);
+
+    // Verify the request body sent to the API has system extracted
+    const [, options] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const reqBody = JSON.parse(options.body as string);
+    expect(reqBody.system).toBe("You are helpful.");
+    expect(reqBody.stream).toBe(true);
+    // System messages should NOT appear in the messages array
+    expect(
+      reqBody.messages.every((m: { role: string }) => m.role !== "system"),
+    ).toBe(true);
+  });
+
+  it("captures usage from message_start and message_delta events", async () => {
+    vi.stubEnv("TEST_ANTHROPIC_KEY", "sk-ant-test");
+
+    const body = sseStream([
+      `data: ${JSON.stringify({
+        type: "message_start",
+        message: { usage: { input_tokens: 20, output_tokens: 1 } },
+      })}\n\n`,
+      `data: ${JSON.stringify({
+        type: "content_block_delta",
+        delta: { type: "text_delta", text: "Done" },
+      })}\n\n`,
+      `data: ${JSON.stringify({
+        type: "message_delta",
+        delta: { stop_reason: "end_turn" },
+        usage: { output_tokens: 10 },
+      })}\n\n`,
+    ]);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(body, { status: 200 }),
+    );
+
+    const provider = createProvider({
+      provider: "anthropic",
+      model: "claude-opus-4-6",
+      apiKeyEnvVar: "TEST_ANTHROPIC_KEY",
+    });
+
+    const gen = provider.completeStream!({
+      model: "claude-opus-4-6",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    const { result } = await collectStream(gen);
+    const completion = result as {
+      usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+    };
+
+    // message_start sets initial usage, message_delta updates output tokens
+    expect(completion.usage).toBeDefined();
+    expect(completion.usage!.promptTokens).toBe(20);
+    expect(completion.usage!.completionTokens).toBe(10);
+    expect(completion.usage!.totalTokens).toBe(30);
   });
 });
