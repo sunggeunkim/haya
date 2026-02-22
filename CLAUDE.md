@@ -165,6 +165,6 @@ The main config is `haya.json` at project root. Key sections:
 - `agent` — defaultProvider, defaultModel, defaultProviderApiKeyEnvVar, awsRegion, systemPrompt, toolPolicies, maxHistoryMessages
 - `cron` — scheduled jobs
 - `plugins` — plugin definitions
-- `tools` — Google Maps, Google OAuth (Calendar/Gmail/Drive)
+- `tools` — Google Maps, Google OAuth (Calendar/Gmail/Drive), webSearch (provider: `"brave"` | `"google"`, apiKeyEnvVar, searchEngineId for Google CSE)
 - `senderAuth` — sender authorization (allowlist/pairing)
 - `sessions.pruning` — auto-pruning old sessions
