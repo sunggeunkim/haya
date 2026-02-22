@@ -43,8 +43,25 @@ export const LoggingSchema = z.object({
   redactSecrets: z.boolean().default(true),
 });
 
+export const GoogleConfigSchema = z.object({
+  clientIdEnvVar: z.string(),
+  clientSecretEnvVar: z.string(),
+  refreshTokenEnvVar: z.string().optional(),
+  tokenPath: z.string().default("data/google-tokens.json"),
+  calendar: z
+    .object({ enabled: z.boolean().default(false) })
+    .default({ enabled: false }),
+  gmail: z
+    .object({ enabled: z.boolean().default(false) })
+    .default({ enabled: false }),
+  drive: z
+    .object({ enabled: z.boolean().default(false) })
+    .default({ enabled: false }),
+});
+
 export const ToolsConfigSchema = z.object({
   googleMapsApiKeyEnvVar: z.string().optional(),
+  google: GoogleConfigSchema.optional(),
 });
 
 export const ToolPolicySchema = z.object({
@@ -61,6 +78,12 @@ export const SessionPruningSchema = z.object({
   enabled: z.boolean().default(false),
   maxAgeDays: z.number().int().min(1).default(90),
   maxSizeMB: z.number().min(1).default(500),
+});
+
+export const BudgetSchema = z.object({
+  maxTokensPerSession: z.number().int().min(0).optional(),
+  maxTokensPerDay: z.number().int().min(0).optional(),
+  maxRequestsPerDay: z.number().int().min(0).optional(),
 });
 
 export const AssistantConfigSchema = z.object({
@@ -82,10 +105,12 @@ export const AssistantConfigSchema = z.object({
     maxHistoryMessages: z.number().int().min(0).default(100),
     workspace: z.string().optional(),
     toolPolicies: z.array(ToolPolicySchema).default([]),
+    maxContextTokens: z.number().int().min(1000).optional(),
   }),
   senderAuth: SenderAuthSchema.optional(),
   sessions: z.object({
     pruning: SessionPruningSchema.optional(),
+    budgets: BudgetSchema.optional(),
   }).optional(),
   memory: MemorySchema.optional(),
   cron: z.array(CronJobSchema).default([]),

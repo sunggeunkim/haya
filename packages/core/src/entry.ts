@@ -160,6 +160,54 @@ program
         }
         log.info("Google Maps tools registered");
       }
+
+      // Register Google OAuth tools (Calendar, Gmail, Drive)
+      if (config.tools?.google) {
+        const { GoogleAuth } = await import("./google/auth.js");
+        const googleScopes: string[] = [];
+        if (config.tools.google.calendar.enabled) {
+          googleScopes.push("https://www.googleapis.com/auth/calendar.events");
+        }
+        if (config.tools.google.gmail.enabled) {
+          googleScopes.push(
+            "https://www.googleapis.com/auth/gmail.readonly",
+            "https://www.googleapis.com/auth/gmail.compose",
+          );
+        }
+        if (config.tools.google.drive.enabled) {
+          googleScopes.push(
+            "https://www.googleapis.com/auth/drive.readonly",
+            "https://www.googleapis.com/auth/drive.file",
+          );
+        }
+        const googleAuth = new GoogleAuth({
+          ...config.tools.google,
+          scopes: googleScopes,
+        });
+
+        if (config.tools.google.calendar.enabled) {
+          const { createCalendarTools } = await import("./agent/google-calendar-tools.js");
+          for (const tool of createCalendarTools(googleAuth)) {
+            agentRuntime.tools.register(tool);
+          }
+          log.info("Google Calendar tools registered");
+        }
+        if (config.tools.google.gmail.enabled) {
+          const { createGmailTools } = await import("./agent/google-gmail-tools.js");
+          for (const tool of createGmailTools(googleAuth)) {
+            agentRuntime.tools.register(tool);
+          }
+          log.info("Gmail tools registered");
+        }
+        if (config.tools.google.drive.enabled) {
+          const { createDriveTools } = await import("./agent/google-drive-tools.js");
+          for (const tool of createDriveTools(googleAuth)) {
+            agentRuntime.tools.register(tool);
+          }
+          log.info("Google Drive tools registered");
+        }
+      }
+
       const sessionStore = new SessionStore("sessions");
       const historyManager = new HistoryManager(
         sessionStore,
@@ -577,6 +625,111 @@ program
         }
       }
     }
+  });
+
+// --- haya google ---
+const googleCmd = program
+  .command("google")
+  .description("Manage Google OAuth authentication");
+
+googleCmd
+  .command("auth")
+  .description("Authorize Haya to access your Google Calendar, Gmail, and Drive")
+  .option("-c, --config <path>", "Path to config file")
+  .action(async (options: { config?: string }) => {
+    const { loadConfig } = await import("./config/loader.js");
+    const configPaths = [
+      options.config,
+      "haya.json",
+      "haya.json5",
+    ].filter(Boolean) as string[];
+
+    let config;
+    for (const p of configPaths) {
+      try {
+        config = await loadConfig(p);
+        break;
+      } catch {
+        continue;
+      }
+    }
+
+    if (!config?.tools?.google) {
+      console.error("No Google configuration found in config file.");
+      console.error("Add a tools.google section with clientIdEnvVar and clientSecretEnvVar.");
+      process.exit(1);
+    }
+
+    const { GoogleAuth } = await import("./google/auth.js");
+    const scopes: string[] = [];
+    if (config.tools.google.calendar.enabled) {
+      scopes.push("https://www.googleapis.com/auth/calendar.events");
+    }
+    if (config.tools.google.gmail.enabled) {
+      scopes.push(
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.compose",
+      );
+    }
+    if (config.tools.google.drive.enabled) {
+      scopes.push(
+        "https://www.googleapis.com/auth/drive.readonly",
+        "https://www.googleapis.com/auth/drive.file",
+      );
+    }
+
+    if (scopes.length === 0) {
+      console.error("No Google services enabled. Enable calendar, gmail, or drive in config.");
+      process.exit(1);
+    }
+
+    const googleAuth = new GoogleAuth({
+      ...config.tools.google,
+      scopes,
+    });
+
+    console.log("Starting Google OAuth authorization...");
+    console.log(`Scopes: ${scopes.join(", ")}\n`);
+
+    await googleAuth.authorize();
+    console.log("\nAuthorization successful! Tokens saved.");
+  });
+
+googleCmd
+  .command("revoke")
+  .description("Revoke Google OAuth tokens")
+  .option("-c, --config <path>", "Path to config file")
+  .action(async (options: { config?: string }) => {
+    const { loadConfig } = await import("./config/loader.js");
+    const configPaths = [
+      options.config,
+      "haya.json",
+      "haya.json5",
+    ].filter(Boolean) as string[];
+
+    let config;
+    for (const p of configPaths) {
+      try {
+        config = await loadConfig(p);
+        break;
+      } catch {
+        continue;
+      }
+    }
+
+    if (!config?.tools?.google) {
+      console.error("No Google configuration found in config file.");
+      process.exit(1);
+    }
+
+    const { GoogleAuth } = await import("./google/auth.js");
+    const googleAuth = new GoogleAuth({
+      ...config.tools.google,
+      scopes: [],
+    });
+
+    await googleAuth.revokeTokens();
+    console.log("Google OAuth tokens revoked and deleted.");
   });
 
 program.parse();

@@ -5,6 +5,7 @@ export {
   ToolPolicySchema,
   SenderAuthSchema,
   SessionPruningSchema,
+  GoogleConfigSchema,
 } from "./config/schema.js";
 export type {
   AssistantConfig,
@@ -135,6 +136,13 @@ export type {
   ToolCall,
   ToolResult,
 } from "./agent/types.js";
+export { createCalendarTools } from "./agent/google-calendar-tools.js";
+export { createGmailTools } from "./agent/google-gmail-tools.js";
+export { createDriveTools } from "./agent/google-drive-tools.js";
+
+// Google OAuth
+export { GoogleAuth, callGoogleApi, callGoogleApiText } from "./google/auth.js";
+export type { GoogleAuthConfig } from "./google/auth.js";
 
 // Sessions
 export { SessionStore } from "./sessions/store.js";
