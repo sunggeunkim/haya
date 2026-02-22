@@ -183,6 +183,15 @@ program
         log.info("Google Maps tools registered");
       }
 
+      // Register web search tools
+      if (config.tools?.webSearch) {
+        const { createSearchTools } = await import("./agent/search-tools.js");
+        for (const tool of createSearchTools(config.tools.webSearch.apiKeyEnvVar)) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Web search tools registered");
+      }
+
       // Register Google OAuth tools (Calendar, Gmail, Drive)
       if (config.tools?.google) {
         const { GoogleAuth } = await import("./google/auth.js");
@@ -228,6 +237,20 @@ program
           }
           log.info("Google Drive tools registered");
         }
+      }
+
+      // Register memory tools
+      let memoryManager: import("./memory/types.js").MemorySearchManager | null = null;
+      if (config.memory?.enabled) {
+        const { createMemoryManager } = await import("./memory/manager.js");
+        memoryManager = await createMemoryManager({
+          dbPath: config.memory.dbPath ?? "data/memory.db",
+        });
+        const { createMemoryTools } = await import("./agent/memory-tools.js");
+        for (const tool of createMemoryTools(memoryManager)) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Memory tools registered");
       }
 
       const sessionStore = new SessionStore("sessions");
@@ -327,9 +350,32 @@ program
       const cronService = new CronService(cronStore);
       await cronService.init(config.cron);
 
-      // Wire cron job handler — route actions including session pruning
+      // Register reminder tools (always available, uses cron service)
+      const { createReminderTools } = await import("./agent/reminder-tools.js");
+      for (const tool of createReminderTools(cronService)) {
+        agentRuntime.tools.register(tool);
+      }
+      log.info("Reminder tools registered");
+
+      // Wire cron job handler — route actions including session pruning and reminders
       cronService.onAction(async (job) => {
-        if (job.action === "prune_sessions") {
+        if (job.action === "send_reminder") {
+          const meta = job.metadata ?? {};
+          const message = (meta.message as string) ?? "Reminder (no message set)";
+          // Deliver reminder to all connected channels
+          for (const ch of channelRegistry.list()) {
+            try {
+              await ch.sendMessage("default", {
+                content: `🔔 Reminder: ${message}`,
+              });
+            } catch {
+              // Channel may not support default destination; skip
+            }
+          }
+          // One-shot reminder: auto-remove after firing
+          await cronService.removeJob(job.id);
+          log.info(`Reminder delivered and removed: ${job.id}`);
+        } else if (job.action === "prune_sessions") {
           const pruningConfig = config.sessions?.pruning;
           if (pruningConfig?.enabled) {
             const result = sessionStore.prune({
@@ -361,6 +407,9 @@ program
       const shutdown = async () => {
         log.info("Shutting down...");
         cronService.stop();
+        if (memoryManager) {
+          memoryManager.close();
+        }
         await channelDock.stopAll();
         await gateway.close();
         process.exit(0);

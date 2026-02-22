@@ -430,6 +430,13 @@ export const defaultToolPolicies = [
   { toolName: "browser_action", level: "confirm" as PolicyLevel },
   { toolName: "sessions_send", level: "confirm" as PolicyLevel },
   { toolName: "sessions_history", level: "confirm" as PolicyLevel },
+  { toolName: "memory_store", level: "allow" as PolicyLevel },
+  { toolName: "memory_search", level: "allow" as PolicyLevel },
+  { toolName: "memory_delete", level: "confirm" as PolicyLevel },
+  { toolName: "reminder_set", level: "confirm" as PolicyLevel },
+  { toolName: "reminder_list", level: "allow" as PolicyLevel },
+  { toolName: "reminder_cancel", level: "confirm" as PolicyLevel },
+  { toolName: "web_search", level: "allow" as PolicyLevel },
 ];
 
 /** All built-in tools (excludes session tools which need runtime config). */
@@ -443,3 +450,6 @@ export const builtinTools: BuiltinTool[] = [
 ];
 
 export { createMapsTools } from "./maps-tools.js";
+export { createMemoryTools } from "./memory-tools.js";
+export { createReminderTools } from "./reminder-tools.js";
+export { createSearchTools } from "./search-tools.js";

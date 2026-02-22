@@ -59,9 +59,15 @@ export const GoogleConfigSchema = z.object({
     .default({ enabled: false }),
 });
 
+export const WebSearchConfigSchema = z.object({
+  provider: z.enum(["brave"]),
+  apiKeyEnvVar: z.string(),
+});
+
 export const ToolsConfigSchema = z.object({
   googleMapsApiKeyEnvVar: z.string().optional(),
   google: GoogleConfigSchema.optional(),
+  webSearch: WebSearchConfigSchema.optional(),
 });
 
 export const ProviderEntrySchema = z.object({

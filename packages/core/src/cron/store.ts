@@ -9,6 +9,7 @@ export interface CronJobEntry {
   schedule: string;
   action: string;
   enabled: boolean;
+  metadata?: Record<string, unknown>;
   lastRunAt?: number;
   lastStatus?: "ok" | "error";
   lastError?: string;
@@ -67,6 +68,7 @@ export class CronStore {
         schedule: configJob.schedule,
         action: configJob.action,
         enabled: configJob.enabled,
+        metadata: existing?.metadata,
         lastRunAt: existing?.lastRunAt,
         lastStatus: existing?.lastStatus,
         lastError: existing?.lastError,
@@ -147,6 +149,7 @@ export class CronStore {
     schedule: string;
     action: string;
     enabled?: boolean;
+    metadata?: Record<string, unknown>;
   }): CronJobEntry {
     if (this.getByName(params.name)) {
       throw new Error(`Job "${params.name}" already exists`);
@@ -159,6 +162,7 @@ export class CronStore {
       schedule: params.schedule,
       action: params.action,
       enabled: params.enabled ?? true,
+      metadata: params.metadata,
       createdAt: now,
       updatedAt: now,
     };

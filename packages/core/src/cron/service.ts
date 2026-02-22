@@ -96,6 +96,7 @@ export class CronService {
     schedule: string;
     action: string;
     enabled?: boolean;
+    metadata?: Record<string, unknown>;
   }): Promise<CronJobEntry> {
     const entry = this.store.add(params);
     if (this.running && entry.enabled) {

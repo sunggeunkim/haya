@@ -149,6 +149,9 @@ export type {
 export { createCalendarTools } from "./agent/google-calendar-tools.js";
 export { createGmailTools } from "./agent/google-gmail-tools.js";
 export { createDriveTools } from "./agent/google-drive-tools.js";
+export { createMemoryTools } from "./agent/memory-tools.js";
+export { createReminderTools } from "./agent/reminder-tools.js";
+export { createSearchTools } from "./agent/search-tools.js";
 
 // Google OAuth
 export { GoogleAuth, callGoogleApi, callGoogleApiText } from "./google/auth.js";
