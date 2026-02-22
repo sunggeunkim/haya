@@ -194,7 +194,26 @@ export type {
   InboundMessage,
   OutboundMessage,
   ChannelMessageHandler,
+  MediaAttachment,
+  MessageEmbed,
+  MessageButton,
 } from "./channels/types.js";
+export { MessageRouter } from "./channels/router.js";
+export type {
+  GroupChatMode,
+  MessageRouterConfig,
+} from "./channels/router.js";
+
+// Media
+export { MediaPipeline } from "./media/pipeline.js";
+export type {
+  MediaAttachment as MediaPipelineAttachment,
+  ProcessedMedia,
+} from "./media/pipeline.js";
+
+// CLI
+export { checkForUpdate, compareVersions, formatUpdateNotice } from "./cli/update.js";
+export type { UpdateCheckResult } from "./cli/update.js";
 
 // Cron
 export { CronStore } from "./cron/store.js";

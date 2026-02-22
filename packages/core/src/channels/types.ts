@@ -65,6 +65,13 @@ export interface ChannelStatus {
   details?: Record<string, unknown>;
 }
 
+export interface MediaAttachment {
+  type: "image" | "audio" | "pdf" | "file";
+  url?: string;
+  mimeType: string;
+  filename?: string;
+}
+
 export interface InboundMessage {
   /** The channel target (e.g., Slack channel ID, DM ID) */
   channelId: string;
@@ -82,6 +89,23 @@ export interface InboundMessage {
   timestamp: number;
   /** Additional platform-specific metadata */
   metadata?: Record<string, unknown>;
+  /** Media attachments */
+  attachments?: MediaAttachment[];
+}
+
+export interface MessageEmbed {
+  title?: string;
+  description?: string;
+  url?: string;
+  color?: string;
+  fields?: Array<{ name: string; value: string; inline?: boolean }>;
+}
+
+export interface MessageButton {
+  label: string;
+  action: string;
+  value?: string;
+  style?: "primary" | "secondary" | "danger";
 }
 
 export interface OutboundMessage {
@@ -89,6 +113,12 @@ export interface OutboundMessage {
   content: string;
   /** Thread ID to reply in a thread */
   threadId?: string;
+  /** Message format hint */
+  format?: "text" | "markdown" | "html";
+  /** Rich embeds */
+  embeds?: MessageEmbed[];
+  /** Interactive buttons */
+  buttons?: MessageButton[];
 }
 
 /**
