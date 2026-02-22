@@ -1,60 +1,8 @@
-# Google Services Setup
+# Google Calendar, Gmail & Drive Setup
 
-Haya integrates with several Google services. Google Calendar, Gmail, and Drive share a single OAuth2 credential. Google Custom Search uses a separate API key.
+Haya can integrate with Google Calendar, Gmail, and Google Drive as agent tools. All three services share a single OAuth2 credential.
 
----
-
-## Google Custom Search
-
-The `web_search` tool can use Google Custom Search Engine (CSE) as its provider instead of Brave Search.
-
-### 1. Create a Custom Search Engine
-
-1. Go to [Programmable Search Engine](https://programmablesearchengine.google.com/)
-2. Click **Add** to create a new search engine
-3. Under "What to search", select **Search the entire web**
-4. Copy the **Search engine ID** (the `cx` value)
-
-### 2. Get an API key
-
-1. Go to [Google Cloud Console > Credentials](https://console.cloud.google.com/apis/credentials)
-2. Click **Create Credentials > API key**
-3. (Recommended) Restrict the key to **Custom Search API** only
-
-### 3. Configure environment variables
-
-Add to your `.env` file:
-
-```bash
-GOOGLE_CSE_API_KEY=your-api-key
-GOOGLE_CSE_SEARCH_ENGINE_ID=your-search-engine-id
-```
-
-### 4. Enable in haya.json
-
-```json5
-{
-  "tools": {
-    "webSearch": {
-      "provider": "google",
-      "apiKeyEnvVar": "GOOGLE_CSE_API_KEY",
-      "searchEngineId": "your-search-engine-id"
-    }
-  }
-}
-```
-
-Note: `searchEngineId` is the literal value, not an env var reference. The API key is resolved from the environment at runtime via `apiKeyEnvVar`.
-
-### Limits
-
-Google CSE free tier allows 100 queries/day. Results are capped at 10 per request (Google API limit).
-
----
-
-## Google Calendar, Gmail & Drive
-
-Google Calendar, Gmail, and Google Drive share a single OAuth2 credential.
+> For Google Custom Search (web search), see [web-search-setup.md](web-search-setup.md).
 
 ## 1. Create Google Cloud credentials
 
