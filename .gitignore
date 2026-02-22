@@ -19,3 +19,9 @@ Thumbs.db
 
 .vscode/
 .idea/
+
+# Pre-commit
+.pre-commit-cache/
+
+# Secret scanning
+.secrets.baseline

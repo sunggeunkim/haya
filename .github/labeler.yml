@@ -1,0 +1,57 @@
+core:
+  - changed-files:
+    - any-glob-to-any-file: 'packages/core/**'
+
+plugin-sdk:
+  - changed-files:
+    - any-glob-to-any-file: 'packages/plugin-sdk/**'
+
+slack:
+  - changed-files:
+    - any-glob-to-any-file: 'extensions/slack/**'
+
+discord:
+  - changed-files:
+    - any-glob-to-any-file: 'extensions/discord/**'
+
+telegram:
+  - changed-files:
+    - any-glob-to-any-file: 'extensions/telegram/**'
+
+teams:
+  - changed-files:
+    - any-glob-to-any-file: 'extensions/teams/**'
+
+whatsapp:
+  - changed-files:
+    - any-glob-to-any-file: 'extensions/whatsapp/**'
+
+signal:
+  - changed-files:
+    - any-glob-to-any-file: 'extensions/signal/**'
+
+irc:
+  - changed-files:
+    - any-glob-to-any-file: 'extensions/irc/**'
+
+google-chat:
+  - changed-files:
+    - any-glob-to-any-file: 'extensions/google-chat/**'
+
+webhook:
+  - changed-files:
+    - any-glob-to-any-file: 'extensions/webhook/**'
+
+ci:
+  - changed-files:
+    - any-glob-to-any-file: '.github/**'
+
+docs:
+  - changed-files:
+    - any-glob-to-any-file: 'docs/**'
+
+docker:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'Dockerfile'
+      - 'docker-compose.yml'

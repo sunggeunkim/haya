@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { chmod, stat } from "node:fs/promises";
 import { dirname } from "node:path";
 import JSON5 from "json5";
+import { migrateConfig } from "./migrations.js";
 import { AssistantConfigSchema } from "./schema.js";
 import type { AssistantConfig } from "./types.js";
 import { validateConfig } from "./validation.js";
@@ -28,7 +29,16 @@ export async function loadConfig(filePath: string): Promise<AssistantConfig> {
     throw new Error(`Config file is not valid JSON or JSON5: ${filePath}`);
   }
 
-  const result = AssistantConfigSchema.safeParse(parsed);
+  const migration = migrateConfig(parsed as Record<string, unknown>);
+  if (migration.applied.length > 0) {
+    writeFileSync(
+      filePath,
+      JSON.stringify(migration.config, null, 2) + "\n",
+      { mode: CONFIG_FILE_MODE },
+    );
+  }
+
+  const result = AssistantConfigSchema.safeParse(migration.config);
   if (!result.success) {
     const messages = result.error.issues.map(
       (i) => `${i.path.join(".")}: ${i.message}`,

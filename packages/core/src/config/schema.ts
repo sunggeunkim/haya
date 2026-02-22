@@ -103,6 +103,7 @@ export const ObservabilitySchema = z.object({
 });
 
 export const AssistantConfigSchema = z.object({
+  configVersion: z.number().int().min(0).optional(),
   gateway: z.object({
     port: z.number().int().min(1).max(65535).default(18789),
     bind: z.enum(["loopback", "lan", "custom"]).default("loopback"),

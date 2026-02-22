@@ -7,9 +7,17 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test:extensions": "vitest run --config vitest.extensions.config.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "tsc --noEmit",
+    "lint:types": "tsc --noEmit",
+    "lint:oxlint": "npx oxlint",
+    "format:check": "npx @biomejs/biome check --no-errors-on-unmatched .",
+    "format:fix": "npx @biomejs/biome check --write --no-errors-on-unmatched .",
+    "check": "pnpm lint && pnpm lint:oxlint",
     "dev": "tsx packages/core/src/entry.ts",
     "audit:security": "tsx packages/core/src/entry.ts audit"
   },
