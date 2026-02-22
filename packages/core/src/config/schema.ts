@@ -43,6 +43,26 @@ export const LoggingSchema = z.object({
   redactSecrets: z.boolean().default(true),
 });
 
+export const ToolsConfigSchema = z.object({
+  googleMapsApiKeyEnvVar: z.string().optional(),
+});
+
+export const ToolPolicySchema = z.object({
+  toolName: z.string(),
+  level: z.enum(["allow", "confirm", "deny"]),
+});
+
+export const SenderAuthSchema = z.object({
+  mode: z.enum(["open", "pairing", "allowlist"]).default("open"),
+  dataDir: z.string().default("data/senders"),
+});
+
+export const SessionPruningSchema = z.object({
+  enabled: z.boolean().default(false),
+  maxAgeDays: z.number().int().min(1).default(90),
+  maxSizeMB: z.number().min(1).default(500),
+});
+
 export const AssistantConfigSchema = z.object({
   gateway: z.object({
     port: z.number().int().min(1).max(65535).default(18789),
@@ -60,9 +80,16 @@ export const AssistantConfigSchema = z.object({
         "You are a helpful assistant responding to users in a chat conversation. Reply directly and concisely.",
       ),
     maxHistoryMessages: z.number().int().min(0).default(100),
+    workspace: z.string().optional(),
+    toolPolicies: z.array(ToolPolicySchema).default([]),
   }),
+  senderAuth: SenderAuthSchema.optional(),
+  sessions: z.object({
+    pruning: SessionPruningSchema.optional(),
+  }).optional(),
   memory: MemorySchema.optional(),
   cron: z.array(CronJobSchema).default([]),
   plugins: z.array(z.string()).default([]),
   logging: LoggingSchema.optional(),
+  tools: ToolsConfigSchema.optional(),
 });

@@ -61,10 +61,25 @@ program
     const { AgentRuntime } = await import("./agent/runtime.js");
     const { SessionStore } = await import("./sessions/store.js");
     const { HistoryManager } = await import("./sessions/history.js");
+    const { ToolPolicyEngine } = await import("./agent/tool-policy.js");
+    const { UsageTracker } = await import("./sessions/usage.js");
+    const { MessageRouter } = await import("./channels/router.js");
 
     const log = createLogger("haya");
 
     try {
+      // Non-blocking update check
+      import("./cli/update.js")
+        .then(({ checkForUpdate, formatUpdateNotice }) =>
+          checkForUpdate("0.1.0").then((info) => {
+            const notice = formatUpdateNotice(info);
+            if (notice) log.info(notice);
+          }),
+        )
+        .catch(() => {
+          /* ignore update check failures */
+        });
+
       const configPath = options.config ?? "haya.json";
       const config = await loadConfig(configPath);
 
@@ -79,23 +94,71 @@ program
 
       // Auto-register channels based on environment variables
       if (process.env.SLACK_BOT_TOKEN) {
-        const { createSlackChannel } = await import("@haya/slack");
-        channelRegistry.register(createSlackChannel());
-        log.info("Slack channel detected via SLACK_BOT_TOKEN");
+        try {
+          const { createSlackChannel } = await import("@haya/slack");
+          channelRegistry.register(createSlackChannel());
+          log.info("Slack channel detected via SLACK_BOT_TOKEN");
+        } catch {
+          log.warn("SLACK_BOT_TOKEN set but @haya/slack not installed");
+        }
       }
+      if (process.env.DISCORD_BOT_TOKEN) {
+        try {
+          const { createDiscordChannel } = await import("@haya/discord");
+          channelRegistry.register(createDiscordChannel());
+          log.info("Discord channel detected via DISCORD_BOT_TOKEN");
+        } catch {
+          log.warn("DISCORD_BOT_TOKEN set but @haya/discord not installed");
+        }
+      }
+      if (process.env.TELEGRAM_BOT_TOKEN) {
+        try {
+          const { createTelegramChannel } = await import("@haya/telegram");
+          channelRegistry.register(createTelegramChannel());
+          log.info("Telegram channel detected via TELEGRAM_BOT_TOKEN");
+        } catch {
+          log.warn("TELEGRAM_BOT_TOKEN set but @haya/telegram not installed");
+        }
+      }
+
+      // Initialize tool policy engine
+      const toolPolicies = config.agent.toolPolicies ?? [];
+      const policyEngine = new ToolPolicyEngine(toolPolicies);
 
       // Initialize agent runtime for channel messages
       const provider = createProvider({
         provider: "openai",
+        model: config.agent.defaultModel,
         apiKeyEnvVar: config.agent.defaultProviderApiKeyEnvVar,
       });
-      const { builtinTools } = await import("./agent/builtin-tools.js");
+      const { builtinTools, createSessionTools } = await import(
+        "./agent/builtin-tools.js"
+      );
       const agentRuntime = new AgentRuntime(provider, {
         defaultModel: config.agent.defaultModel,
         systemPrompt: config.agent.systemPrompt,
       });
+
+      // Set up policy engine on tool registry
+      agentRuntime.tools.setPolicyEngine(policyEngine);
+
+      // Register built-in tools
       for (const tool of builtinTools) {
         agentRuntime.tools.register(tool);
+      }
+
+      // Register session tools
+      const sessionTools = createSessionTools("sessions");
+      for (const tool of sessionTools) {
+        agentRuntime.tools.register(tool);
+      }
+
+      if (config.tools?.googleMapsApiKeyEnvVar) {
+        const { createMapsTools } = await import("./agent/maps-tools.js");
+        for (const tool of createMapsTools(config.tools.googleMapsApiKeyEnvVar)) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Google Maps tools registered");
       }
       const sessionStore = new SessionStore("sessions");
       const historyManager = new HistoryManager(
@@ -103,8 +166,52 @@ program
         config.agent.maxHistoryMessages,
       );
 
+      // Initialize usage tracker
+      const usageTracker = new UsageTracker("data");
+
+      // Initialize sender auth (if configured)
+      let senderAuth: import("./security/sender-auth.js").SenderAuthManager | null = null;
+      if (config.senderAuth) {
+        const { SenderAuthManager } = await import("./security/sender-auth.js");
+        senderAuth = new SenderAuthManager({
+          mode: config.senderAuth.mode,
+          dataDir: config.senderAuth.dataDir,
+        });
+        log.info(`Sender auth enabled in ${config.senderAuth.mode} mode`);
+      }
+
+      // Initialize message router for group chats
+      const messageRouter = new MessageRouter({
+        groupChatMode: "mentions",
+        botNames: ["haya"],
+      });
+
       // Wire channel messages to the agent runtime
       channelDock.onMessage(async (msg) => {
+        // Check sender auth
+        if (senderAuth) {
+          const senderStatus = await senderAuth.checkSender(msg.senderId);
+          if (senderStatus !== "allowed") {
+            if (senderStatus === "unknown" && senderAuth.getMode() === "pairing") {
+              const code = await senderAuth.createPairingCode(msg.senderId);
+              const channel = channelRegistry.get(msg.channel);
+              if (channel) {
+                await channel.sendMessage(msg.channelId, {
+                  content: `You are not yet authorized. Your pairing code is: ${code}\nAsk the admin to run: haya senders approve ${code}`,
+                  threadId: msg.threadId,
+                });
+              }
+            }
+            log.info(`Blocked message from unauthorized sender ${msg.senderId}`);
+            return;
+          }
+        }
+
+        // Check message router for group chat filtering
+        if (!messageRouter.shouldProcess(msg).process) {
+          return;
+        }
+
         const rawKey =
           (msg.metadata?.sessionKey as string) ??
           `${msg.channel}:${msg.channelId}`;
@@ -117,6 +224,15 @@ program
           { sessionId: sessionKey, message: msg.content },
           history,
         );
+
+        // Track usage
+        if (response.usage) {
+          usageTracker.record(
+            sessionKey,
+            config.agent.defaultModel,
+            response.usage,
+          );
+        }
 
         // Persist conversation
         historyManager.addMessages(sessionKey, [
@@ -140,6 +256,24 @@ program
       );
       const cronService = new CronService(cronStore);
       await cronService.init(config.cron);
+
+      // Wire cron job handler — route actions including session pruning
+      cronService.onAction(async (job) => {
+        if (job.action === "prune_sessions") {
+          const pruningConfig = config.sessions?.pruning;
+          if (pruningConfig?.enabled) {
+            const result = sessionStore.prune({
+              maxAgeDays: pruningConfig.maxAgeDays,
+              maxSizeMB: pruningConfig.maxSizeMB,
+            });
+            if (result.deletedCount > 0) {
+              log.info(`Pruned ${result.deletedCount} sessions (freed ${result.freedBytes} bytes)`);
+            }
+          }
+        } else {
+          log.warn(`Unknown cron action: ${job.action}`);
+        }
+      });
 
       // Create and start the gateway
       const gateway = createGateway({ config });
@@ -308,6 +442,44 @@ cronCmd
     }
   });
 
+// --- haya senders ---
+const sendersCmd = program
+  .command("senders")
+  .description("Manage authorized senders");
+
+sendersCmd
+  .command("approve <code>")
+  .description("Approve a sender by pairing code")
+  .option("-d, --data-dir <path>", "Sender data directory", "data/senders")
+  .action(async (code: string, options: { dataDir: string }) => {
+    const { SenderAuthManager } = await import("./security/sender-auth.js");
+    const auth = new SenderAuthManager({ mode: "pairing", dataDir: options.dataDir });
+    const result = await auth.approvePairing(code);
+    if (result.success) {
+      console.log(`Approved sender: ${result.senderId}`);
+    } else {
+      console.error("Invalid or expired pairing code.");
+      process.exit(1);
+    }
+  });
+
+sendersCmd
+  .command("list")
+  .description("List all authorized senders")
+  .option("-d, --data-dir <path>", "Sender data directory", "data/senders")
+  .action(async (options: { dataDir: string }) => {
+    const { SenderAuthManager } = await import("./security/sender-auth.js");
+    const auth = new SenderAuthManager({ mode: "pairing", dataDir: options.dataDir });
+    const senders = await auth.listSenders();
+    if (senders.length === 0) {
+      console.log("No registered senders.");
+    } else {
+      for (const s of senders) {
+        console.log(`  ${s.senderId}: ${s.status}`);
+      }
+    }
+  });
+
 // --- haya config show ---
 program
   .command("config")
@@ -343,6 +515,67 @@ program
 
     if (!report.ok) {
       process.exit(1);
+    }
+  });
+
+// --- haya doctor ---
+program
+  .command("doctor")
+  .description("Run diagnostic checks on the Haya installation")
+  .option("-c, --config <path>", "Path to config file")
+  .action(async (options: { config?: string }) => {
+    const { runDoctorChecks, formatDoctorResults } = await import(
+      "./cli/doctor.js"
+    );
+
+    const report = await runDoctorChecks(options.config);
+    console.log(formatDoctorResults(report));
+
+    if (!report.ok) {
+      process.exit(1);
+    }
+  });
+
+// --- haya onboard ---
+program
+  .command("onboard")
+  .description("Interactive setup wizard for a new Haya installation")
+  .action(async () => {
+    const { runOnboardWizard } = await import("./cli/onboard.js");
+    await runOnboardWizard();
+  });
+
+// --- haya usage ---
+program
+  .command("usage")
+  .description("Show token usage statistics")
+  .option("-s, --session <id>", "Filter by session ID")
+  .option("--since <date>", "Show usage since date (ISO format)")
+  .action(async (options: { session?: string; since?: string }) => {
+    const { UsageTracker } = await import("./sessions/usage.js");
+    const tracker = new UsageTracker("data");
+
+    if (options.session) {
+      const usage = tracker.getSessionUsage(options.session);
+      console.log(`Session: ${options.session}`);
+      console.log(`  Total tokens: ${usage.totalTokens}`);
+      console.log(`  Requests: ${usage.records.length}`);
+    } else {
+      const since = options.since ? new Date(options.since).getTime() : undefined;
+      const usage = tracker.getTotalUsage(since);
+      console.log("Usage summary:");
+      console.log(`  Total tokens: ${usage.totalTokens}`);
+      console.log(`  Prompt tokens: ${usage.promptTokens}`);
+      console.log(`  Completion tokens: ${usage.completionTokens}`);
+      console.log(`  Requests: ${usage.requestCount}`);
+
+      const byModel = tracker.getUsageByModel(since);
+      if (byModel.size > 0) {
+        console.log("\nBy model:");
+        for (const [model, stats] of byModel) {
+          console.log(`  ${model}: ${stats.totalTokens} tokens (${stats.requestCount} requests)`);
+        }
+      }
     }
   });
 

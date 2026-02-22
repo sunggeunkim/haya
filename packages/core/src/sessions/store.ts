@@ -5,6 +5,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -149,6 +150,79 @@ export class SessionStore {
         messageCount: messages.length,
       };
     });
+  }
+
+  /**
+   * Prune old or large sessions based on age and total size limits.
+   * Returns pruning statistics.
+   */
+  prune(options: { maxAgeDays?: number; maxSizeMB?: number }): { deletedCount: number; freedBytes: number } {
+    if (!existsSync(this.baseDir)) return { deletedCount: 0, freedBytes: 0 };
+
+    const files = readdirSync(this.baseDir).filter((f) =>
+      f.endsWith(".jsonl"),
+    );
+
+    if (files.length === 0) return { deletedCount: 0, freedBytes: 0 };
+
+    let deletedCount = 0;
+    let freedBytes = 0;
+    const now = Date.now();
+    const maxAgeMs = options.maxAgeDays
+      ? options.maxAgeDays * 24 * 60 * 60 * 1000
+      : undefined;
+
+    // Age-based pruning
+    if (maxAgeMs) {
+      for (const file of files) {
+        const filePath = join(this.baseDir, file);
+        try {
+          const stat = statSync(filePath);
+          if (now - stat.mtimeMs > maxAgeMs) {
+            const size = stat.size;
+            rmSync(filePath);
+            deletedCount++;
+            freedBytes += size;
+          }
+        } catch {
+          // Skip files we can't stat
+        }
+      }
+    }
+
+    // Size-based pruning (remove oldest first)
+    if (options.maxSizeMB) {
+      const maxBytes = options.maxSizeMB * 1024 * 1024;
+      const remaining = readdirSync(this.baseDir)
+        .filter((f) => f.endsWith(".jsonl"))
+        .map((f) => {
+          const filePath = join(this.baseDir, f);
+          try {
+            const stat = statSync(filePath);
+            return { file: f, path: filePath, size: stat.size, mtime: stat.mtimeMs };
+          } catch {
+            return null;
+          }
+        })
+        .filter((e): e is NonNullable<typeof e> => e !== null)
+        .sort((a, b) => a.mtime - b.mtime); // oldest first
+
+      let totalSize = remaining.reduce((sum, e) => sum + e.size, 0);
+
+      for (const entry of remaining) {
+        if (totalSize <= maxBytes) break;
+        try {
+          rmSync(entry.path);
+          totalSize -= entry.size;
+          deletedCount++;
+          freedBytes += entry.size;
+        } catch {
+          // Skip files we can't remove
+        }
+      }
+    }
+
+    return { deletedCount, freedBytes };
   }
 
   private sessionPath(sessionId: string): string {

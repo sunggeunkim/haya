@@ -21,7 +21,10 @@ export const DEFAULT_CONFIG: Omit<AssistantConfig, "gateway" | "agent"> & {
   agent: {
     defaultModel: "gpt-4o",
     defaultProviderApiKeyEnvVar: undefined,
+    systemPrompt:
+      "You are a helpful assistant responding to users in a chat conversation. Reply directly and concisely.",
     maxHistoryMessages: 100,
+    toolPolicies: [],
   },
   cron: [],
   plugins: [],

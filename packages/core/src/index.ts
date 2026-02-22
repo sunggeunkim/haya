@@ -1,5 +1,11 @@
 // Config
-export { AssistantConfigSchema, GatewayAuthSchema } from "./config/schema.js";
+export {
+  AssistantConfigSchema,
+  GatewayAuthSchema,
+  ToolPolicySchema,
+  SenderAuthSchema,
+  SessionPruningSchema,
+} from "./config/schema.js";
 export type {
   AssistantConfig,
   CronJob,
@@ -26,6 +32,13 @@ export {
   getBoundaryMarkers,
 } from "./security/external-content.js";
 export type { WrappedContent } from "./security/external-content.js";
+export { WorkspaceGuard, WorkspaceViolationError } from "./security/workspace.js";
+export { SenderAuthManager } from "./security/sender-auth.js";
+export type {
+  SenderAuthMode,
+  SenderStatus,
+  PairingCode,
+} from "./security/sender-auth.js";
 
 // Infrastructure
 export { createLogger, redactSensitive } from "./infra/logger.js";
@@ -89,6 +102,24 @@ export type { AgentRuntimeConfig } from "./agent/runtime.js";
 export { createProvider } from "./agent/providers.js";
 export type { AIProvider } from "./agent/providers.js";
 export { ToolRegistry } from "./agent/tools.js";
+export { ToolPolicyEngine } from "./agent/tool-policy.js";
+export type {
+  PolicyLevel,
+  ToolPolicy,
+  ApprovalCallback,
+} from "./agent/tool-policy.js";
+export {
+  builtinTools,
+  createSessionTools,
+  defaultToolPolicies,
+  webFetchTool,
+  shellExecTool,
+  fileReadTool,
+  fileWriteTool,
+  fileListTool,
+  browserActionTool,
+} from "./agent/builtin-tools.js";
+export type { BuiltinTool } from "./agent/builtin-tools.js";
 export type {
   AgentTool,
   ChatRequest,
@@ -108,6 +139,8 @@ export type {
 // Sessions
 export { SessionStore } from "./sessions/store.js";
 export { HistoryManager } from "./sessions/history.js";
+export { UsageTracker } from "./sessions/usage.js";
+export type { UsageRecord } from "./sessions/usage.js";
 export type {
   Session,
   SessionEntry,
@@ -214,6 +247,9 @@ export type {
 // CLI
 export { checkForUpdate, compareVersions, formatUpdateNotice } from "./cli/update.js";
 export type { UpdateCheckResult } from "./cli/update.js";
+export { runDoctorChecks, formatDoctorResults } from "./cli/doctor.js";
+export type { DoctorCheck, DoctorReport } from "./cli/doctor.js";
+export { runOnboardWizard } from "./cli/onboard.js";
 
 // Cron
 export { CronStore } from "./cron/store.js";

@@ -1,4 +1,5 @@
 import type { AgentTool, ToolCall, ToolResult } from "./types.js";
+import type { ToolPolicyEngine } from "./tool-policy.js";
 
 /**
  * Tool execution framework.
@@ -8,6 +9,7 @@ import type { AgentTool, ToolCall, ToolResult } from "./types.js";
 
 export class ToolRegistry {
   private readonly tools = new Map<string, AgentTool>();
+  private policyEngine: ToolPolicyEngine | null = null;
 
   register(tool: AgentTool): void {
     if (this.tools.has(tool.name)) {
@@ -36,9 +38,18 @@ export class ToolRegistry {
     return this.tools.size;
   }
 
+  setPolicyEngine(engine: ToolPolicyEngine): void {
+    this.policyEngine = engine;
+  }
+
+  getPolicyEngine(): ToolPolicyEngine | null {
+    return this.policyEngine;
+  }
+
   /**
    * Execute a single tool call. Catches errors and returns them as
-   * error results rather than throwing.
+   * error results rather than throwing. Applies tool policy checks
+   * before execution if a policy engine is set.
    */
   async execute(toolCall: ToolCall): Promise<ToolResult> {
     const tool = this.tools.get(toolCall.name);
@@ -59,6 +70,18 @@ export class ToolRegistry {
         content: `Invalid tool arguments: ${toolCall.arguments}`,
         isError: true,
       };
+    }
+
+    // Check tool policy before executing
+    if (this.policyEngine) {
+      const policyResult = await this.policyEngine.checkPolicy(toolCall.name, args);
+      if (!policyResult.allowed) {
+        return {
+          toolCallId: toolCall.id,
+          content: `Tool blocked by policy: ${policyResult.reason ?? "denied"}`,
+          isError: true,
+        };
+      }
     }
 
     try {

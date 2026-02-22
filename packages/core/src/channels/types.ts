@@ -119,6 +119,8 @@ export interface OutboundMessage {
   embeds?: MessageEmbed[];
   /** Interactive buttons */
   buttons?: MessageButton[];
+  /** Media attachments */
+  attachments?: MediaAttachment[];
 }
 
 /**
