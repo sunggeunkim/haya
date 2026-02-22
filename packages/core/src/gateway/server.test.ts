@@ -16,7 +16,9 @@ function makeTestConfig(overrides?: Partial<AssistantConfig>): AssistantConfig {
     agent: {
       defaultModel: "gpt-4o",
       defaultProviderApiKeyEnvVar: "TEST_KEY",
+      systemPrompt: "You are a test assistant.",
       maxHistoryMessages: 100,
+      toolPolicies: [],
     },
     cron: [],
     plugins: [],

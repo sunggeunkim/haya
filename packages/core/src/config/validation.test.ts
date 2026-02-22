@@ -13,7 +13,10 @@ function makeConfig(overrides: Record<string, unknown> = {}): AssistantConfig {
     agent: {
       defaultModel: "gpt-4o",
       defaultProviderApiKeyEnvVar: "OPENAI_API_KEY",
+      systemPrompt:
+        "You are a helpful assistant responding to users in a chat conversation. Reply directly and concisely.",
       maxHistoryMessages: 100,
+      toolPolicies: [],
     },
     cron: [],
     plugins: [],

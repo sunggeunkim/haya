@@ -89,7 +89,10 @@ export async function initializeConfig(
     agent: {
       defaultModel: "gpt-4o",
       defaultProviderApiKeyEnvVar: providerApiKeyEnvVar,
+      systemPrompt:
+        "You are a helpful assistant responding to users in a chat conversation. Reply directly and concisely.",
       maxHistoryMessages: 100,
+      toolPolicies: [],
     },
     cron: [],
     plugins: [],
