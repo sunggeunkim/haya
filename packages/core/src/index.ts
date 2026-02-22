@@ -7,6 +7,9 @@ export {
   SessionPruningSchema,
   GoogleConfigSchema,
   ObservabilitySchema,
+  ImageGenerationConfigSchema,
+  AutoReplyConfigSchema,
+  AutoReplyRuleConfigSchema,
 } from "./config/schema.js";
 export type {
   AssistantConfig,
@@ -138,6 +141,7 @@ export type {
   ChatChunkEvent,
   CompletionRequest,
   CompletionResponse,
+  ContentPart,
   Message,
   MessageRole,
   ProviderConfig,
@@ -152,6 +156,14 @@ export { createDriveTools } from "./agent/google-drive-tools.js";
 export { createMemoryTools } from "./agent/memory-tools.js";
 export { createReminderTools } from "./agent/reminder-tools.js";
 export { createSearchTools } from "./agent/search-tools.js";
+export { createImageTools } from "./agent/image-tools.js";
+export { createMessageTools } from "./agent/message-tools.js";
+export { createGatewayTools } from "./agent/gateway-tools.js";
+export type { GatewayToolContext } from "./agent/gateway-tools.js";
+export { createVisionTools } from "./agent/vision-tools.js";
+export { createAutoReplyTools } from "./agent/auto-reply-tools.js";
+export { createLinkTools } from "./agent/link-tools.js";
+export { createGeminiProvider } from "./agent/gemini.js";
 
 // Google OAuth
 export { GoogleAuth, callGoogleApi, callGoogleApiText } from "./google/auth.js";
@@ -257,6 +269,10 @@ export type {
   GroupChatMode,
   MessageRouterConfig,
 } from "./channels/router.js";
+export { AutoReplyEngine } from "./channels/auto-reply.js";
+export { AutoReplyRuleSchema } from "./channels/auto-reply.js";
+export type { AutoReplyRule, AutoReplyMatch } from "./channels/auto-reply.js";
+export { AutoReplyStore } from "./channels/auto-reply-store.js";
 
 // Media
 export { MediaPipeline } from "./media/pipeline.js";

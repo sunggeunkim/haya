@@ -1,5 +1,6 @@
 import { resolveSecret } from "../config/secrets.js";
 import { createBedrockProvider } from "./bedrock.js";
+import { createGeminiProvider } from "./gemini.js";
 import { fetchWithRetry } from "./retry.js";
 import type { RetryOptions } from "./retry.js";
 import { parseSSEStream } from "./stream-parser.js";
@@ -36,6 +37,13 @@ export function createProvider(config: ProviderConfig): AIProvider {
       return createAnthropicProvider(config);
     case "bedrock":
       return createBedrockProvider(config);
+    case "gemini":
+      return createGeminiProvider(config);
+    case "ollama":
+      return createOpenAICompatibleProvider(
+        config,
+        config.baseUrl ?? "http://localhost:11434/v1",
+      );
     default:
       if (config.baseUrl) {
         return createOpenAICompatibleProvider(config, config.baseUrl);
@@ -53,11 +61,8 @@ function createOpenAICompatibleProvider(
   return {
     name: config.provider,
     async complete(request: CompletionRequest): Promise<CompletionResponse> {
-      if (!config.apiKeyEnvVar) {
-        throw new Error("apiKeyEnvVar is required for OpenAI-compatible providers");
-      }
-      const apiKey = resolveSecret(config.apiKeyEnvVar);
-      if (!apiKey) {
+      const apiKey = config.apiKeyEnvVar ? resolveSecret(config.apiKeyEnvVar) : undefined;
+      if (config.apiKeyEnvVar && !apiKey) {
         throw new Error(
           `API key not found in env var: ${config.apiKeyEnvVar}`,
         );
@@ -88,7 +93,7 @@ function createOpenAICompatibleProvider(
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
+            ...(apiKey && { Authorization: `Bearer ${apiKey}` }),
           },
           body: JSON.stringify(body),
         },
@@ -130,11 +135,8 @@ function createOpenAICompatibleProvider(
     },
 
     async *completeStream(request: CompletionRequest): AsyncGenerator<StreamDelta, CompletionResponse> {
-      if (!config.apiKeyEnvVar) {
-        throw new Error("apiKeyEnvVar is required for OpenAI-compatible providers");
-      }
-      const apiKey = resolveSecret(config.apiKeyEnvVar);
-      if (!apiKey) {
+      const apiKey = config.apiKeyEnvVar ? resolveSecret(config.apiKeyEnvVar) : undefined;
+      if (config.apiKeyEnvVar && !apiKey) {
         throw new Error(`API key not found in env var: ${config.apiKeyEnvVar}`);
       }
 
@@ -158,7 +160,7 @@ function createOpenAICompatibleProvider(
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
+            ...(apiKey && { Authorization: `Bearer ${apiKey}` }),
           },
           body: JSON.stringify(body),
         },
@@ -264,6 +266,20 @@ function createAnthropicProvider(config: ProviderConfig): AIProvider {
               content: [{ type: "tool_result", tool_use_id: m.toolCallId, content: m.content }],
             };
           }
+          if (m.contentParts && m.contentParts.length > 0) {
+            return {
+              role: m.role,
+              content: m.contentParts.map((part) => {
+                if (part.type === "text") {
+                  return { type: "text", text: part.text };
+                }
+                return {
+                  type: "image",
+                  source: { type: "url", url: part.image_url.url },
+                };
+              }),
+            };
+          }
           return { role: m.role, content: m.content };
         }),
         ...(request.temperature !== undefined && {
@@ -353,6 +369,20 @@ function createAnthropicProvider(config: ProviderConfig): AIProvider {
             return {
               role: "user" as const,
               content: [{ type: "tool_result", tool_use_id: m.toolCallId, content: m.content }],
+            };
+          }
+          if (m.contentParts && m.contentParts.length > 0) {
+            return {
+              role: m.role,
+              content: m.contentParts.map((part) => {
+                if (part.type === "text") {
+                  return { type: "text", text: part.text };
+                }
+                return {
+                  type: "image",
+                  source: { type: "url", url: part.image_url.url },
+                };
+              }),
             };
           }
           return { role: m.role, content: m.content };
@@ -454,8 +484,23 @@ function formatOpenAIMessage(
 ): Record<string, unknown> {
   const base: Record<string, unknown> = {
     role: msg.role,
-    content: msg.content,
   };
+
+  // Use contentParts for multi-modal messages
+  if (msg.contentParts && msg.contentParts.length > 0) {
+    base.content = msg.contentParts.map((part) => {
+      if (part.type === "text") {
+        return { type: "text", text: part.text };
+      }
+      return {
+        type: "image_url",
+        image_url: { url: part.image_url.url, detail: part.image_url.detail ?? "auto" },
+      };
+    });
+  } else {
+    base.content = msg.content;
+  }
+
   if (msg.name) base.name = msg.name;
   if (msg.toolCallId) base.tool_call_id = msg.toolCallId;
   if (msg.toolCalls) {

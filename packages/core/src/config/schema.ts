@@ -64,10 +64,31 @@ export const WebSearchConfigSchema = z.object({
   apiKeyEnvVar: z.string(),
 });
 
+export const ImageGenerationConfigSchema = z.object({
+  provider: z.enum(["openai"]).default("openai"),
+  apiKeyEnvVar: z.string(),
+});
+
+export const AutoReplyRuleConfigSchema = z.object({
+  id: z.string(),
+  pattern: z.string(),
+  flags: z.string().default("i"),
+  reply: z.string(),
+  passthrough: z.boolean().default(true),
+  enabled: z.boolean().default(true),
+  channels: z.array(z.string()).optional(),
+});
+
+export const AutoReplyConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  rules: z.array(AutoReplyRuleConfigSchema).default([]),
+});
+
 export const ToolsConfigSchema = z.object({
   googleMapsApiKeyEnvVar: z.string().optional(),
   google: GoogleConfigSchema.optional(),
   webSearch: WebSearchConfigSchema.optional(),
+  imageGeneration: ImageGenerationConfigSchema.optional(),
 });
 
 export const ProviderEntrySchema = z.object({
@@ -144,5 +165,6 @@ export const AssistantConfigSchema = z.object({
   plugins: z.array(z.string()).default([]),
   logging: LoggingSchema.optional(),
   tools: ToolsConfigSchema.optional(),
+  autoReply: AutoReplyConfigSchema.optional(),
   observability: ObservabilitySchema.optional(),
 });

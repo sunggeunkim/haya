@@ -1,4 +1,4 @@
-import type { AgentTool } from "./types.js";
+import type { BuiltinTool } from "./builtin-tools.js";
 
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_DESCRIPTION_LENGTH = 500;
@@ -113,8 +113,9 @@ function isValidUrl(url: string): boolean {
 // link_preview tool
 // ---------------------------------------------------------------------------
 
-const linkPreviewTool: AgentTool = {
+const linkPreviewTool: BuiltinTool = {
   name: "link_preview",
+  defaultPolicy: "allow",
   description:
     "Fetch a URL and extract its metadata (title, description, image, type). " +
     "Useful for understanding what a link points to without reading the full page.",
@@ -168,6 +169,6 @@ const linkPreviewTool: AgentTool = {
 // Public factory
 // ---------------------------------------------------------------------------
 
-export function createLinkTools(): AgentTool[] {
+export function createLinkTools(): BuiltinTool[] {
   return [linkPreviewTool];
 }

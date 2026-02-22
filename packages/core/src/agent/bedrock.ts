@@ -102,7 +102,15 @@ export function formatBedrockMessages(messages: Message[]): {
     }
 
     // user messages
-    formatted.push({ role: "user", content: [{ text: msg.content }] });
+    if (msg.contentParts && msg.contentParts.length > 0) {
+      const parts = msg.contentParts.map((part) => {
+        if (part.type === "text") return { text: part.text };
+        return { text: `[Image: ${part.image_url.url}]` };
+      });
+      formatted.push({ role: "user", content: parts });
+    } else {
+      formatted.push({ role: "user", content: [{ text: msg.content }] });
+    }
   }
 
   return { system, messages: formatted };

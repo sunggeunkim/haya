@@ -437,6 +437,17 @@ export const defaultToolPolicies = [
   { toolName: "reminder_list", level: "allow" as PolicyLevel },
   { toolName: "reminder_cancel", level: "confirm" as PolicyLevel },
   { toolName: "web_search", level: "allow" as PolicyLevel },
+  { toolName: "image_generate", level: "confirm" as PolicyLevel },
+  { toolName: "message_send", level: "confirm" as PolicyLevel },
+  { toolName: "message_broadcast", level: "confirm" as PolicyLevel },
+  { toolName: "channels_list", level: "allow" as PolicyLevel },
+  { toolName: "gateway_status", level: "allow" as PolicyLevel },
+  { toolName: "gateway_config", level: "allow" as PolicyLevel },
+  { toolName: "link_preview", level: "allow" as PolicyLevel },
+  { toolName: "auto_reply_add", level: "confirm" as PolicyLevel },
+  { toolName: "auto_reply_list", level: "allow" as PolicyLevel },
+  { toolName: "auto_reply_remove", level: "confirm" as PolicyLevel },
+  { toolName: "image_analyze", level: "allow" as PolicyLevel },
 ];
 
 /** All built-in tools (excludes session tools which need runtime config). */
@@ -453,3 +464,11 @@ export { createMapsTools } from "./maps-tools.js";
 export { createMemoryTools } from "./memory-tools.js";
 export { createReminderTools } from "./reminder-tools.js";
 export { createSearchTools } from "./search-tools.js";
+export { createImageTools } from "./image-tools.js";
+export { createMessageTools } from "./message-tools.js";
+export { createGatewayTools } from "./gateway-tools.js";
+export type { GatewayToolContext } from "./gateway-tools.js";
+export { createVisionTools } from "./vision-tools.js";
+export { createAutoReplyTools } from "./auto-reply-tools.js";
+export { createLinkTools } from "./link-tools.js";
+export { createGeminiProvider } from "./gemini.js";

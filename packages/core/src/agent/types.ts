@@ -4,9 +4,15 @@
 
 export type MessageRole = "system" | "user" | "assistant" | "tool";
 
+export type ContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string; detail?: "auto" | "low" | "high" } };
+
 export interface Message {
   role: MessageRole;
   content: string;
+  /** Multi-modal content parts. When present, providers use this instead of `content`. */
+  contentParts?: ContentPart[];
   name?: string;
   toolCallId?: string;
   toolCalls?: ToolCall[];
@@ -35,6 +41,7 @@ export interface AgentTool {
 export interface ChatRequest {
   sessionId: string;
   message: string;
+  contentParts?: ContentPart[];
   model?: string;
   systemPrompt?: string;
 }

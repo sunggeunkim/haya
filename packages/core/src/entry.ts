@@ -66,6 +66,7 @@ program
     const { MessageRouter } = await import("./channels/router.js");
 
     const log = createLogger("haya");
+    const startTime = Date.now();
 
     try {
       // Non-blocking update check
@@ -192,6 +193,15 @@ program
         log.info("Web search tools registered");
       }
 
+      // Register image generation tools
+      if (config.tools?.imageGeneration) {
+        const { createImageTools } = await import("./agent/image-tools.js");
+        for (const tool of createImageTools(config.tools.imageGeneration.apiKeyEnvVar)) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Image generation tools registered");
+      }
+
       // Register Google OAuth tools (Calendar, Gmail, Drive)
       if (config.tools?.google) {
         const { GoogleAuth } = await import("./google/auth.js");
@@ -253,6 +263,33 @@ program
         log.info("Memory tools registered");
       }
 
+      // Register message tools (cross-channel messaging)
+      {
+        const { createMessageTools } = await import("./agent/message-tools.js");
+        for (const tool of createMessageTools(channelRegistry)) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Message tools registered");
+      }
+
+      // Register link preview tools
+      {
+        const { createLinkTools } = await import("./agent/link-tools.js");
+        for (const tool of createLinkTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Link preview tools registered");
+      }
+
+      // Register vision/image analysis tools
+      {
+        const { createVisionTools } = await import("./agent/vision-tools.js");
+        for (const tool of createVisionTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Vision tools registered");
+      }
+
       const sessionStore = new SessionStore("sessions");
       const historyManager = new HistoryManager(
         sessionStore,
@@ -279,6 +316,26 @@ program
         botNames: ["haya"],
       });
 
+      // Initialize auto-reply system
+      let autoReplyEngine: import("./channels/auto-reply.js").AutoReplyEngine | null = null;
+      if (config.autoReply?.enabled) {
+        const { AutoReplyEngine } = await import("./channels/auto-reply.js");
+        const { AutoReplyStore } = await import("./channels/auto-reply-store.js");
+        const { createAutoReplyTools } = await import("./agent/auto-reply-tools.js");
+
+        const autoReplyStore = new AutoReplyStore(
+          configPath.replace(/\.json$/, ".auto-reply.json"),
+        );
+        await autoReplyStore.load(config.autoReply.rules);
+
+        autoReplyEngine = new AutoReplyEngine(autoReplyStore.list());
+
+        for (const tool of createAutoReplyTools(autoReplyStore, autoReplyEngine)) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info(`Auto-reply enabled with ${autoReplyStore.size} rules`);
+      }
+
       // Wire channel messages to the agent runtime
       channelDock.onMessage(async (msg) => {
         // Check sender auth
@@ -303,6 +360,26 @@ program
         // Check message router for group chat filtering
         if (!messageRouter.shouldProcess(msg).process) {
           return;
+        }
+
+        // Auto-reply interception
+        if (autoReplyEngine) {
+          const matches = autoReplyEngine.check(msg.content, msg.channel);
+          if (matches.length > 0) {
+            const channel = channelRegistry.get(msg.channel);
+            if (channel) {
+              for (const m of matches) {
+                await channel.sendMessage(msg.channelId, {
+                  content: m.reply,
+                  threadId: msg.threadId,
+                });
+              }
+            }
+            // If no matching rule wants passthrough, skip AI processing
+            if (!autoReplyEngine.shouldForwardToAI(msg.content, msg.channel)) {
+              return;
+            }
+          }
         }
 
         const rawKey =
@@ -349,6 +426,20 @@ program
       );
       const cronService = new CronService(cronStore);
       await cronService.init(config.cron);
+
+      // Register gateway status tools
+      {
+        const { createGatewayTools } = await import("./agent/gateway-tools.js");
+        for (const tool of createGatewayTools({
+          config,
+          uptime: () => Date.now() - startTime,
+          channelRegistry,
+          cronService,
+        })) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Gateway tools registered");
+      }
 
       // Register reminder tools (always available, uses cron service)
       const { createReminderTools } = await import("./agent/reminder-tools.js");

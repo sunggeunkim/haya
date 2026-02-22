@@ -78,6 +78,7 @@ export class AgentRuntime {
     messages.push({
       role: "user",
       content: request.message,
+      ...(request.contentParts && { contentParts: request.contentParts }),
       timestamp: Date.now(),
     });
 
