@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { extname } from "node:path";
 import { requireSecret } from "../config/secrets.js";
 import type { BuiltinTool } from "./builtin-tools.js";
@@ -56,6 +56,12 @@ export function createAudioTools(apiKeyEnvVar: string): BuiltinTool[] {
           throw new Error(
             `Unsupported audio format "${ext}". Supported formats: ${SUPPORTED_EXTENSIONS}`,
           );
+        }
+
+        const MAX_FILE_SIZE = 25 * 1024 * 1024;
+        const fileSize = statSync(filePath).size;
+        if (fileSize > MAX_FILE_SIZE) {
+          throw new Error(`Audio file too large: ${(fileSize / (1024 * 1024)).toFixed(1)}MB exceeds 25MB Whisper API limit`);
         }
 
         let buffer: Buffer;

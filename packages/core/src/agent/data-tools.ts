@@ -2,6 +2,11 @@ import type { BuiltinTool } from "./builtin-tools.js";
 
 const MAX_RESPONSE_LENGTH = 16_000;
 
+const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+function isDangerousKey(key: string): boolean {
+  return DANGEROUS_KEYS.has(key);
+}
+
 // ---------------------------------------------------------------------------
 // CSV helpers
 // ---------------------------------------------------------------------------
@@ -85,7 +90,7 @@ function toCsv(data: unknown): string {
 
 function parseYaml(input: string): unknown {
   const lines = input.split("\n");
-  const result: Record<string, unknown> = {};
+  const result: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
   let currentKey: string | null = null;
   let currentArray: unknown[] | null = null;
 
@@ -113,12 +118,26 @@ function parseYaml(input: string): unknown {
 
       // Finish any previous array
       if (currentKey !== null && currentArray !== null) {
-        result[currentKey] = currentArray;
-        currentArray = null;
-        currentKey = null;
+        // If transitioning to a non-indented key, flush the array
+        if (indent === 0) {
+          if (!isDangerousKey(currentKey)) {
+            result[currentKey] = currentArray;
+          }
+          currentArray = null;
+          currentKey = null;
+        }
       }
 
       if (rawValue === "") {
+        // Flush current context before starting new section
+        if (currentKey !== null && currentArray !== null) {
+          if (!isDangerousKey(currentKey)) {
+            result[currentKey] = currentArray;
+          }
+          currentArray = null;
+          currentKey = null;
+        }
+        if (isDangerousKey(key)) continue;
         // Could be start of an array or nested object — check next lines
         currentKey = key;
         currentArray = [];
@@ -127,18 +146,28 @@ function parseYaml(input: string): unknown {
         if (typeof result[currentKey] !== "object" || Array.isArray(result[currentKey])) {
           result[currentKey] = {} as Record<string, unknown>;
         }
-        (result[currentKey] as Record<string, unknown>)[key] = parseYamlValue(rawValue);
+        if (!isDangerousKey(key)) {
+          (result[currentKey] as Record<string, unknown>)[key] = parseYamlValue(rawValue);
+        }
       } else {
         if (currentKey !== null && currentArray !== null && currentArray.length === 0) {
           // Empty array was actually a nested object start
           result[currentKey] = {} as Record<string, unknown>;
-          (result[currentKey] as Record<string, unknown>)[key] = parseYamlValue(rawValue);
+          if (!isDangerousKey(key)) {
+            (result[currentKey] as Record<string, unknown>)[key] = parseYamlValue(rawValue);
+          }
           currentArray = null;
           // keep currentKey for additional nested keys
           continue;
         }
+        if (currentKey !== null && currentArray !== null) {
+          if (!isDangerousKey(currentKey)) {
+            result[currentKey] = currentArray;
+          }
+          currentArray = null;
+        }
         currentKey = null;
-        currentArray = null;
+        if (isDangerousKey(key)) continue;
         result[key] = parseYamlValue(rawValue);
       }
     }
@@ -146,7 +175,9 @@ function parseYaml(input: string): unknown {
 
   // Flush any trailing array
   if (currentKey !== null && currentArray !== null) {
-    result[currentKey] = currentArray;
+    if (!isDangerousKey(currentKey)) {
+      result[currentKey] = currentArray;
+    }
   }
 
   return result;
@@ -238,7 +269,7 @@ function toYaml(data: unknown, indent: number = 0): string {
 // ---------------------------------------------------------------------------
 
 function parseToml(input: string): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
+  const result: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
   let currentSection: Record<string, unknown> = result;
 
   const lines = input.split("\n");
@@ -249,6 +280,7 @@ function parseToml(input: string): Record<string, unknown> {
     // Section header [section]
     if (line.startsWith("[") && line.endsWith("]")) {
       const sectionName = line.slice(1, -1).trim();
+      if (isDangerousKey(sectionName)) continue;
       if (!(sectionName in result)) {
         result[sectionName] = {};
       }
@@ -261,6 +293,7 @@ function parseToml(input: string): Record<string, unknown> {
     if (eqIdx === -1) continue;
 
     const key = line.slice(0, eqIdx).trim();
+    if (isDangerousKey(key)) continue;
     const rawValue = line.slice(eqIdx + 1).trim();
 
     currentSection[key] = parseTomlValue(rawValue);

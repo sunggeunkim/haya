@@ -79,6 +79,16 @@ export function createArchiveTools(): BuiltinTool[] {
           throw new Error("source_paths is required and must not be empty");
         }
 
+        const workspace = (args as Record<string, unknown>).__workspace as string | undefined;
+        if (workspace) {
+          const { WorkspaceGuard } = await import("../security/workspace.js");
+          const guard = new WorkspaceGuard([workspace]);
+          guard.validatePath(outputPath);
+          for (const sp of sourcePaths) {
+            guard.validatePath(sp);
+          }
+        }
+
         const format =
           (args.format as "zip" | "tar.gz" | undefined) ??
           detectFormat(outputPath);
@@ -122,6 +132,14 @@ export function createArchiveTools(): BuiltinTool[] {
 
         if (!archivePath) throw new Error("archive_path is required");
         if (!outputDir) throw new Error("output_dir is required");
+
+        const workspace = (args as Record<string, unknown>).__workspace as string | undefined;
+        if (workspace) {
+          const { WorkspaceGuard } = await import("../security/workspace.js");
+          const guard = new WorkspaceGuard([workspace]);
+          guard.validatePath(archivePath);
+          guard.validatePath(outputDir);
+        }
 
         if (!existsSync(archivePath)) {
           throw new Error(`Archive not found: ${archivePath}`);

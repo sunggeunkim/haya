@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, statSync } from "node:fs";
 import { extname } from "node:path";
 import { safeExecSync } from "../security/command-exec.js";
 import type { BuiltinTool } from "./builtin-tools.js";
@@ -98,13 +98,14 @@ function formatCsvTable(rows: string[][]): string {
  * text between parentheses in content streams (between stream/endstream markers).
  */
 function extractPdfTextFallback(raw: string): string {
+  const bounded = raw.slice(0, 5 * 1024 * 1024);
   const texts: string[] = [];
 
   // Find content between stream and endstream markers
   const streamRegex = /stream\r?\n([\s\S]*?)endstream/g;
   let match: RegExpExecArray | null;
 
-  while ((match = streamRegex.exec(raw)) !== null) {
+  while ((match = streamRegex.exec(bounded)) !== null) {
     const streamContent = match[1];
 
     // Extract text from BT...ET blocks (text objects)
@@ -115,7 +116,7 @@ function extractPdfTextFallback(raw: string): string {
       const textBlock = btMatch[1];
 
       // Extract text between parentheses (Tj/TJ operators)
-      const parenRegex = /\(([^)]*)\)/g;
+      const parenRegex = /\(([^)]{0,10000})\)/g;
       let parenMatch: RegExpExecArray | null;
 
       while ((parenMatch = parenRegex.exec(textBlock)) !== null) {
@@ -172,8 +173,21 @@ export function createPdfTools(): BuiltinTool[] {
         const filePath = args.path as string;
         if (!filePath) throw new Error("path is required");
 
+        const workspace = (args as Record<string, unknown>).__workspace as string | undefined;
+        if (workspace) {
+          const { WorkspaceGuard } = await import("../security/workspace.js");
+          const guard = new WorkspaceGuard([workspace]);
+          guard.validatePath(filePath);
+        }
+
         if (!existsSync(filePath)) {
           throw new Error(`File not found: ${filePath}`);
+        }
+
+        const MAX_FILE_SIZE = 50 * 1024 * 1024;
+        const fileSize = statSync(filePath).size;
+        if (fileSize > MAX_FILE_SIZE) {
+          throw new Error(`File too large: ${(fileSize / (1024 * 1024)).toFixed(1)}MB exceeds 50MB limit`);
         }
 
         const ext = extname(filePath).toLowerCase();

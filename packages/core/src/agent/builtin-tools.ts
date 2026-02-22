@@ -49,6 +49,9 @@ export const webFetchTool: BuiltinTool = {
       throw new Error(`Unsupported protocol: ${parsed.protocol}`);
     }
 
+    const { assertNotPrivateUrl } = await import("../security/ssrf-guard.js");
+    await assertNotPrivateUrl(url);
+
     const response = await fetch(url, {
       headers: { "User-Agent": "Haya/0.1" },
       signal: AbortSignal.timeout(10_000),
@@ -153,6 +156,13 @@ export const fileReadTool: BuiltinTool = {
     const filePath = args.path as string;
     if (!filePath) throw new Error("path is required");
 
+    const workspace = (args as Record<string, unknown>).__workspace as string | undefined;
+    if (workspace) {
+      const { WorkspaceGuard } = await import("../security/workspace.js");
+      const guard = new WorkspaceGuard([workspace]);
+      guard.validatePath(filePath);
+    }
+
     const content = readFileSync(filePath, "utf-8");
     const MAX_LENGTH = 16_000;
     if (content.length > MAX_LENGTH) {
@@ -193,6 +203,13 @@ export const fileWriteTool: BuiltinTool = {
     if (!filePath) throw new Error("path is required");
     if (content === undefined) throw new Error("content is required");
 
+    const workspace = (args as Record<string, unknown>).__workspace as string | undefined;
+    if (workspace) {
+      const { WorkspaceGuard } = await import("../security/workspace.js");
+      const guard = new WorkspaceGuard([workspace]);
+      guard.validatePath(filePath);
+    }
+
     mkdirSync(dirname(filePath), { recursive: true });
     writeFileSync(filePath, content, { mode: 0o600 });
     return `Wrote ${content.length} bytes to ${filePath}`;
@@ -219,6 +236,13 @@ export const fileListTool: BuiltinTool = {
   async execute(args: Record<string, unknown>): Promise<string> {
     const { readdirSync, statSync } = await import("node:fs");
     const dirPath = (args.path as string) ?? ".";
+
+    const workspace = (args as Record<string, unknown>).__workspace as string | undefined;
+    if (workspace) {
+      const { WorkspaceGuard } = await import("../security/workspace.js");
+      const guard = new WorkspaceGuard([workspace]);
+      guard.validatePath(dirPath);
+    }
 
     const entries = readdirSync(dirPath);
     const lines: string[] = [];

@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SsrfViolationError } from "../security/ssrf-guard.js";
 import { createLinkTools } from "./link-tools.js";
 import type { AgentTool } from "./types.js";
+
+vi.mock("../security/ssrf-guard.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../security/ssrf-guard.js")>();
+  return {
+    ...actual,
+    assertNotPrivateUrl: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 function getTool(tools: AgentTool[], name: string): AgentTool {
   const tool = tools.find((t) => t.name === name);
@@ -311,5 +320,62 @@ describe("link_preview", () => {
     const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
     const headers = options.headers as Record<string, string>;
     expect(headers["User-Agent"]).toBe("Haya/0.1.0 (link-preview)");
+  });
+
+  // -------------------------------------------------------------------------
+  // SSRF protection
+  // -------------------------------------------------------------------------
+
+  it("blocks URLs targeting private/internal addresses", async () => {
+    const { assertNotPrivateUrl } = await import(
+      "../security/ssrf-guard.js"
+    );
+    vi.mocked(assertNotPrivateUrl).mockRejectedValueOnce(
+      new SsrfViolationError("localhost"),
+    );
+
+    const result = JSON.parse(
+      await tool.execute({ url: "https://localhost/admin" }),
+    );
+
+    expect(result.error).toContain("SSRF blocked");
+    expect(result.url).toBeUndefined();
+  });
+
+  it("does not include url field in SSRF error response", async () => {
+    const { assertNotPrivateUrl } = await import(
+      "../security/ssrf-guard.js"
+    );
+    vi.mocked(assertNotPrivateUrl).mockRejectedValueOnce(
+      new SsrfViolationError("10.0.0.1", "10.0.0.1"),
+    );
+
+    const result = JSON.parse(
+      await tool.execute({ url: "https://internal.example.com" }),
+    );
+
+    expect(result.error).toContain("SSRF blocked");
+    expect(result).not.toHaveProperty("url");
+  });
+
+  // -------------------------------------------------------------------------
+  // HTML truncation (ReDoS mitigation)
+  // -------------------------------------------------------------------------
+
+  it("only parses metadata from the first 100KB of HTML", async () => {
+    // Place a title after 102,400 bytes — it should be ignored
+    const padding = "x".repeat(102_400);
+    const html = `${padding}<html><head><title>Hidden Title</title></head></html>`;
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(new Response(html)),
+    );
+
+    const result = JSON.parse(
+      await tool.execute({ url: "https://example.com" }),
+    );
+
+    expect(result.title).toBeNull();
   });
 });

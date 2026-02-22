@@ -68,6 +68,9 @@ export function createHttpTools(): BuiltinTool[] {
           );
         }
 
+        const { assertNotPrivateUrl } = await import("../security/ssrf-guard.js");
+        await assertNotPrivateUrl(url);
+
         const method = (args.method as string) ?? "GET";
         const headers = (args.headers as Record<string, string>) ?? {};
         const body = args.body as string | undefined;

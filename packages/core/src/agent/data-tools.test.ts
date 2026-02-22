@@ -211,6 +211,72 @@ describe("data_convert", () => {
     expect(data.database.host).toBe("localhost");
     expect(data.database.port).toBe(5432);
   });
+
+  // -------------------------------------------------------------------------
+  // Prototype pollution: YAML
+  // -------------------------------------------------------------------------
+
+  describe("prototype pollution prevention (YAML)", () => {
+    for (const key of ["__proto__", "constructor", "prototype"]) {
+      it(`ignores dangerous key "${key}" in YAML top-level`, async () => {
+        setup();
+        const input = `safe: hello\n${key}: polluted`;
+        const result = await tool.execute({ input, from: "yaml", to: "json" });
+        const data = JSON.parse(result);
+        expect(data.safe).toBe("hello");
+        expect(data).not.toHaveProperty(key);
+      });
+
+      it(`ignores dangerous key "${key}" in YAML nested object`, async () => {
+        setup();
+        const input = `parent:\n  ${key}: polluted\n  ok: value`;
+        const result = await tool.execute({ input, from: "yaml", to: "json" });
+        const data = JSON.parse(result);
+        expect(data.parent.ok).toBe("value");
+        expect(data.parent).not.toHaveProperty(key);
+      });
+    }
+
+    it("does not pollute Object.prototype via YAML __proto__", async () => {
+      setup();
+      const input = "__proto__:\n  polluted: yes";
+      await tool.execute({ input, from: "yaml", to: "json" });
+      expect(({} as Record<string, unknown>)["polluted"]).toBeUndefined();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Prototype pollution: TOML
+  // -------------------------------------------------------------------------
+
+  describe("prototype pollution prevention (TOML)", () => {
+    for (const key of ["__proto__", "constructor", "prototype"]) {
+      it(`ignores dangerous key "${key}" in TOML key-value`, async () => {
+        setup();
+        const input = `safe = "hello"\n${key} = "polluted"`;
+        const result = await tool.execute({ input, from: "toml", to: "json" });
+        const data = JSON.parse(result);
+        expect(data.safe).toBe("hello");
+        expect(data).not.toHaveProperty(key);
+      });
+
+      it(`ignores dangerous section name "${key}" in TOML`, async () => {
+        setup();
+        const input = `safe = "hello"\n\n[${key}]\nfoo = "bar"`;
+        const result = await tool.execute({ input, from: "toml", to: "json" });
+        const data = JSON.parse(result);
+        expect(data.safe).toBe("hello");
+        expect(data).not.toHaveProperty(key);
+      });
+    }
+
+    it("does not pollute Object.prototype via TOML __proto__ section", async () => {
+      setup();
+      const input = '[__proto__]\npolluted = "yes"';
+      await tool.execute({ input, from: "toml", to: "json" });
+      expect(({} as Record<string, unknown>)["polluted"]).toBeUndefined();
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

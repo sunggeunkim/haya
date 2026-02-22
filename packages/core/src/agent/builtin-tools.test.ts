@@ -31,6 +31,30 @@ describe("builtin-tools", () => {
     it("rejects unsupported protocol", async () => {
       await expect(webFetchTool.execute({ url: "ftp://example.com" })).rejects.toThrow("Unsupported protocol");
     });
+
+    it("blocks SSRF to private IPs", async () => {
+      await expect(
+        webFetchTool.execute({ url: "http://127.0.0.1/secret" }),
+      ).rejects.toThrow("SSRF blocked");
+    });
+
+    it("blocks SSRF to localhost", async () => {
+      await expect(
+        webFetchTool.execute({ url: "http://localhost/admin" }),
+      ).rejects.toThrow("SSRF blocked");
+    });
+
+    it("blocks SSRF to 10.x private range", async () => {
+      await expect(
+        webFetchTool.execute({ url: "http://10.0.0.1/internal" }),
+      ).rejects.toThrow("SSRF blocked");
+    });
+
+    it("blocks SSRF to 192.168.x private range", async () => {
+      await expect(
+        webFetchTool.execute({ url: "http://192.168.1.1/router" }),
+      ).rejects.toThrow("SSRF blocked");
+    });
   });
 
   describe("shellExecTool", () => {
@@ -71,6 +95,28 @@ describe("builtin-tools", () => {
     it("rejects missing path", async () => {
       await expect(fileReadTool.execute({})).rejects.toThrow("path is required");
     });
+
+    it("allows read when path is inside workspace", async () => {
+      const testFile = join(tmpDir, "allowed.txt");
+      writeFileSync(testFile, "allowed content");
+      const result = await fileReadTool.execute({ path: testFile, __workspace: tmpDir });
+      expect(result).toBe("allowed content");
+    });
+
+    it("blocks read when path is outside workspace", async () => {
+      const testFile = join(tmpDir, "test.txt");
+      writeFileSync(testFile, "data");
+      await expect(
+        fileReadTool.execute({ path: "/etc/passwd", __workspace: tmpDir }),
+      ).rejects.toThrow("outside allowed workspace");
+    });
+
+    it("allows read without workspace restriction", async () => {
+      const testFile = join(tmpDir, "no-guard.txt");
+      writeFileSync(testFile, "no guard");
+      const result = await fileReadTool.execute({ path: testFile });
+      expect(result).toBe("no guard");
+    });
   });
 
   describe("fileWriteTool", () => {
@@ -95,6 +141,27 @@ describe("builtin-tools", () => {
     it("rejects missing path", async () => {
       await expect(fileWriteTool.execute({ content: "x" })).rejects.toThrow("path is required");
     });
+
+    it("allows write when path is inside workspace", async () => {
+      const testFile = join(tmpDir, "allowed-write.txt");
+      const result = await fileWriteTool.execute({
+        path: testFile,
+        content: "safe",
+        __workspace: tmpDir,
+      });
+      expect(result).toContain("4 bytes");
+      expect(readFileSync(testFile, "utf-8")).toBe("safe");
+    });
+
+    it("blocks write when path is outside workspace", async () => {
+      await expect(
+        fileWriteTool.execute({
+          path: "/tmp/haya-outside-workspace.txt",
+          content: "bad",
+          __workspace: tmpDir,
+        }),
+      ).rejects.toThrow("outside allowed workspace");
+    });
   });
 
   describe("fileListTool", () => {
@@ -117,6 +184,17 @@ describe("builtin-tools", () => {
       expect(result).toContain("subdir");
       expect(result).toContain("file");
       expect(result).toContain("dir");
+    });
+
+    it("allows list when path is inside workspace", async () => {
+      const result = await fileListTool.execute({ path: tmpDir, __workspace: tmpDir });
+      expect(result).toContain("a.txt");
+    });
+
+    it("blocks list when path is outside workspace", async () => {
+      await expect(
+        fileListTool.execute({ path: "/etc", __workspace: tmpDir }),
+      ).rejects.toThrow("outside allowed workspace");
     });
   });
 

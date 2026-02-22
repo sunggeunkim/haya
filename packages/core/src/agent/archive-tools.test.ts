@@ -17,6 +17,13 @@ vi.mock("node:fs", async () => {
   };
 });
 
+const mockValidatePath = vi.fn();
+vi.mock("../security/workspace.js", () => ({
+  WorkspaceGuard: vi.fn().mockImplementation(() => ({
+    validatePath: mockValidatePath,
+  })),
+}));
+
 function getTool(tools: AgentTool[], name: string): AgentTool {
   const tool = tools.find((t) => t.name === name);
   if (!tool) throw new Error(`Tool not found: ${name}`);
@@ -302,5 +309,167 @@ describe("archive_extract", () => {
     expect(mockMkdirSync).toHaveBeenCalledWith("/tmp/new-dir/nested", {
       recursive: true,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WorkspaceGuard — archive_create
+// ---------------------------------------------------------------------------
+
+describe("archive_create WorkspaceGuard", () => {
+  let tool: AgentTool;
+
+  beforeEach(async () => {
+    mockValidatePath.mockReset();
+    const workspace = await import("../security/workspace.js");
+    (workspace.WorkspaceGuard as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+      validatePath: mockValidatePath,
+    }));
+
+    tool = getTool(createArchiveTools(), "archive_create");
+    const commandExec = await import("../security/command-exec.js");
+    (commandExec.safeExecSync as ReturnType<typeof vi.fn>).mockClear();
+    (commandExec.safeExecSync as ReturnType<typeof vi.fn>).mockReturnValue("");
+
+    const fs = await import("node:fs");
+    (fs.statSync as ReturnType<typeof vi.fn>).mockClear();
+    (fs.statSync as ReturnType<typeof vi.fn>).mockReturnValue({ size: 2048 });
+  });
+
+  it("validates all paths when __workspace is set", async () => {
+    const result = await tool.execute({
+      output_path: "/tmp/backup.tar.gz",
+      source_paths: ["/tmp/src", "/tmp/docs"],
+      __workspace: "/home/user/project",
+    });
+
+    expect(mockValidatePath).toHaveBeenCalledTimes(3);
+    expect(mockValidatePath).toHaveBeenCalledWith("/tmp/backup.tar.gz");
+    expect(mockValidatePath).toHaveBeenCalledWith("/tmp/src");
+    expect(mockValidatePath).toHaveBeenCalledWith("/tmp/docs");
+    expect(result).toContain("Created archive");
+  });
+
+  it("throws when validatePath rejects output_path", async () => {
+    mockValidatePath.mockImplementation((p: string) => {
+      if (p === "/etc/evil.tar.gz") {
+        throw new Error("Path is outside allowed workspace roots: /etc/evil.tar.gz");
+      }
+    });
+
+    await expect(
+      tool.execute({
+        output_path: "/etc/evil.tar.gz",
+        source_paths: ["/tmp/src"],
+        __workspace: "/home/user/project",
+      }),
+    ).rejects.toThrow("Path is outside allowed workspace roots");
+  });
+
+  it("throws when validatePath rejects a source_path", async () => {
+    mockValidatePath.mockImplementation((p: string) => {
+      if (p === "/var/secret") {
+        throw new Error("Path is outside allowed workspace roots: /var/secret");
+      }
+    });
+
+    await expect(
+      tool.execute({
+        output_path: "/tmp/backup.tar.gz",
+        source_paths: ["/tmp/src", "/var/secret"],
+        __workspace: "/home/user/project",
+      }),
+    ).rejects.toThrow("Path is outside allowed workspace roots");
+  });
+
+  it("skips validation when __workspace is not set", async () => {
+    const result = await tool.execute({
+      output_path: "/var/backup.tar.gz",
+      source_paths: ["/var/config"],
+    });
+
+    expect(mockValidatePath).not.toHaveBeenCalled();
+    expect(result).toContain("Created archive");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WorkspaceGuard — archive_extract
+// ---------------------------------------------------------------------------
+
+describe("archive_extract WorkspaceGuard", () => {
+  let tool: AgentTool;
+
+  beforeEach(async () => {
+    mockValidatePath.mockReset();
+    const workspace = await import("../security/workspace.js");
+    (workspace.WorkspaceGuard as unknown as ReturnType<typeof vi.fn>).mockImplementation(() => ({
+      validatePath: mockValidatePath,
+    }));
+
+    tool = getTool(createArchiveTools(), "archive_extract");
+    const commandExec = await import("../security/command-exec.js");
+    (commandExec.safeExecSync as ReturnType<typeof vi.fn>).mockClear();
+    (commandExec.safeExecSync as ReturnType<typeof vi.fn>).mockReturnValue("");
+
+    const fs = await import("node:fs");
+    (fs.existsSync as ReturnType<typeof vi.fn>).mockClear();
+    (fs.existsSync as ReturnType<typeof vi.fn>).mockReturnValue(true);
+    (fs.mkdirSync as ReturnType<typeof vi.fn>).mockClear();
+  });
+
+  it("validates both paths when __workspace is set", async () => {
+    const result = await tool.execute({
+      archive_path: "/tmp/backup.tar.gz",
+      output_dir: "/tmp/output",
+      __workspace: "/home/user/project",
+    });
+
+    expect(mockValidatePath).toHaveBeenCalledTimes(2);
+    expect(mockValidatePath).toHaveBeenCalledWith("/tmp/backup.tar.gz");
+    expect(mockValidatePath).toHaveBeenCalledWith("/tmp/output");
+    expect(result).toBe("Extracted to /tmp/output");
+  });
+
+  it("throws when validatePath rejects archive_path", async () => {
+    mockValidatePath.mockImplementation((p: string) => {
+      if (p === "/var/evil.tar.gz") {
+        throw new Error("Path is outside allowed workspace roots: /var/evil.tar.gz");
+      }
+    });
+
+    await expect(
+      tool.execute({
+        archive_path: "/var/evil.tar.gz",
+        output_dir: "/tmp/output",
+        __workspace: "/home/user/project",
+      }),
+    ).rejects.toThrow("Path is outside allowed workspace roots");
+  });
+
+  it("throws when validatePath rejects output_dir", async () => {
+    mockValidatePath.mockImplementation((p: string) => {
+      if (p === "/var/output") {
+        throw new Error("Path is outside allowed workspace roots: /var/output");
+      }
+    });
+
+    await expect(
+      tool.execute({
+        archive_path: "/tmp/backup.tar.gz",
+        output_dir: "/var/output",
+        __workspace: "/home/user/project",
+      }),
+    ).rejects.toThrow("Path is outside allowed workspace roots");
+  });
+
+  it("skips validation when __workspace is not set", async () => {
+    const result = await tool.execute({
+      archive_path: "/var/backup.tar.gz",
+      output_dir: "/var/output",
+    });
+
+    expect(mockValidatePath).not.toHaveBeenCalled();
+    expect(result).toBe("Extracted to /var/output");
   });
 });

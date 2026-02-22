@@ -37,6 +37,13 @@ export function createQrTools(): BuiltinTool[] {
           (args.output_path as string) ??
           `/tmp/haya-qr-${Date.now()}.png`;
 
+        const workspace = (args as Record<string, unknown>).__workspace as string | undefined;
+        if (workspace) {
+          const { WorkspaceGuard } = await import("../security/workspace.js");
+          const guard = new WorkspaceGuard([workspace]);
+          guard.validatePath(outputPath);
+        }
+
         try {
           safeExecSync("qrencode", ["-o", outputPath, "-t", "PNG", text]);
           return `QR code saved to ${outputPath}`;
@@ -78,6 +85,13 @@ export function createQrTools(): BuiltinTool[] {
       async execute(args: Record<string, unknown>): Promise<string> {
         const imagePath = args.image_path as string;
         if (!imagePath) throw new Error("image_path is required");
+
+        const workspace = (args as Record<string, unknown>).__workspace as string | undefined;
+        if (workspace) {
+          const { WorkspaceGuard } = await import("../security/workspace.js");
+          const guard = new WorkspaceGuard([workspace]);
+          guard.validatePath(imagePath);
+        }
 
         try {
           const output = safeExecSync("zbarimg", [

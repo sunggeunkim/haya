@@ -227,6 +227,34 @@ describe("http_request", () => {
     await expect(tools[0].execute({})).rejects.toThrow("url is required");
   });
 
+  it("blocks SSRF to private IPs", async () => {
+    const tools = createHttpTools();
+    await expect(
+      tools[0].execute({ url: "http://127.0.0.1/admin" }),
+    ).rejects.toThrow("SSRF blocked");
+  });
+
+  it("blocks SSRF to localhost", async () => {
+    const tools = createHttpTools();
+    await expect(
+      tools[0].execute({ url: "http://localhost:8080/internal" }),
+    ).rejects.toThrow("SSRF blocked");
+  });
+
+  it("blocks SSRF to 10.x private range", async () => {
+    const tools = createHttpTools();
+    await expect(
+      tools[0].execute({ url: "http://10.0.0.1/secret" }),
+    ).rejects.toThrow("SSRF blocked");
+  });
+
+  it("blocks SSRF to 192.168.x private range", async () => {
+    const tools = createHttpTools();
+    await expect(
+      tools[0].execute({ url: "http://192.168.1.1/" }),
+    ).rejects.toThrow("SSRF blocked");
+  });
+
   it("truncates long response bodies", async () => {
     const longBody = "x".repeat(20_000);
     const mock = createMockResponse({ body: longBody });

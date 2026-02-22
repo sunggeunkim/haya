@@ -180,12 +180,14 @@ export function createSystemTools(): BuiltinTool[] {
               "$bitmap = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height);",
               "$graphics = [System.Drawing.Graphics]::FromImage($bitmap);",
               "$graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size);",
-              `$bitmap.Save('${outputPath.replace(/'/g, "''")}');`,
+              "$bitmap.Save($env:HAYA_SCREENSHOT_PATH);",
               "$graphics.Dispose();",
               "$bitmap.Dispose();",
             ].join(" ");
-            execFileSync("powershell.exe", ["-Command", script], {
+            const encoded = Buffer.from(script, "utf16le").toString("base64");
+            execFileSync("powershell.exe", ["-EncodedCommand", encoded], {
               shell: false,
+              env: { ...process.env, HAYA_SCREENSHOT_PATH: outputPath },
             });
           } else {
             throw new Error(`Unsupported platform: ${platform}`);

@@ -44,7 +44,8 @@ export function createCodeEvalTools(): BuiltinTool[] {
 
         const logs: string[] = [];
 
-        const sandbox: Record<string, unknown> = {
+        const sandbox = Object.create(null) as Record<string, unknown>;
+        Object.assign(sandbox, {
           JSON,
           Math,
           Date,
@@ -62,15 +63,15 @@ export function createCodeEvalTools(): BuiltinTool[] {
           isFinite,
           encodeURIComponent,
           decodeURIComponent,
-          console: {
+          console: Object.freeze({
             log: (...logArgs: unknown[]) =>
               logs.push(logArgs.map(String).join(" ")),
-          },
-        };
+          }),
+        });
 
         let result: unknown;
         try {
-          result = runInNewContext(code, sandbox, { timeout });
+          result = runInNewContext(code, sandbox, { timeout, microtaskMode: "afterEvaluate" });
         } catch (err: unknown) {
           const message =
             err instanceof Error ? err.message : String(err);

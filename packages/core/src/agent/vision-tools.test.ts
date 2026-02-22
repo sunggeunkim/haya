@@ -73,4 +73,28 @@ describe("image_analyze", () => {
       tool.execute({ url: "ftp://files.example.com/image.png" }),
     ).rejects.toThrow("Unsupported protocol");
   });
+
+  it("blocks SSRF to private IPs", async () => {
+    await expect(
+      tool.execute({ url: "http://127.0.0.1/image.png" }),
+    ).rejects.toThrow("SSRF blocked");
+  });
+
+  it("blocks SSRF to localhost", async () => {
+    await expect(
+      tool.execute({ url: "http://localhost/image.png" }),
+    ).rejects.toThrow("SSRF blocked");
+  });
+
+  it("blocks SSRF to 10.x private range", async () => {
+    await expect(
+      tool.execute({ url: "http://10.0.0.1/image.png" }),
+    ).rejects.toThrow("SSRF blocked");
+  });
+
+  it("blocks SSRF to 192.168.x private range", async () => {
+    await expect(
+      tool.execute({ url: "https://192.168.1.100/image.png" }),
+    ).rejects.toThrow("SSRF blocked");
+  });
 });

@@ -3,6 +3,21 @@ import { writeFileSync, unlinkSync } from "node:fs";
 import { createPdfTools } from "./pdf-tools.js";
 import type { AgentTool } from "./types.js";
 
+const mockStatSize = vi.hoisted(() => ({ value: -1 }));
+
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...actual,
+    statSync: (...args: Parameters<typeof actual.statSync>) => {
+      if (mockStatSize.value >= 0) {
+        return { size: mockStatSize.value } as ReturnType<typeof actual.statSync>;
+      }
+      return actual.statSync(...args);
+    },
+  };
+});
+
 function getTool(tools: AgentTool[], name: string): AgentTool {
   const tool = tools.find((t) => t.name === name);
   if (!tool) throw new Error(`Tool not found: ${name}`);
@@ -228,5 +243,54 @@ describe("pdf_extract", () => {
 
   it("throws when path is not provided", async () => {
     await expect(tool.execute({})).rejects.toThrow("path is required");
+  });
+
+  // -------------------------------------------------------------------------
+  // WorkspaceGuard
+  // -------------------------------------------------------------------------
+
+  it("rejects paths outside workspace when __workspace is set", async () => {
+    const path = writeTmp("secret.txt", "sensitive data");
+
+    await expect(
+      tool.execute({ path, __workspace: "/nonexistent-workspace" }),
+    ).rejects.toThrow("outside allowed workspace roots");
+  });
+
+  it("allows paths inside workspace when __workspace is set", async () => {
+    const content = "inside workspace";
+    const path = writeTmp("allowed.txt", content);
+
+    const result = await tool.execute({ path, __workspace: "/tmp" });
+    expect(result).toBe(content);
+  });
+
+  // -------------------------------------------------------------------------
+  // File size limit
+  // -------------------------------------------------------------------------
+
+  it("rejects files larger than 50MB", async () => {
+    const path = writeTmp("size-check.txt", "hello");
+
+    mockStatSize.value = 60 * 1024 * 1024; // 60MB
+    try {
+      await expect(tool.execute({ path })).rejects.toThrow(
+        "exceeds 50MB limit",
+      );
+    } finally {
+      mockStatSize.value = -1;
+    }
+  });
+
+  it("allows files under 50MB", async () => {
+    const path = writeTmp("ok-size.txt", "hello");
+
+    mockStatSize.value = 10 * 1024 * 1024; // 10MB
+    try {
+      const result = await tool.execute({ path });
+      expect(result).toBe("hello");
+    } finally {
+      mockStatSize.value = -1;
+    }
   });
 });

@@ -1,3 +1,7 @@
+import {
+  assertNotPrivateUrl,
+  SsrfViolationError,
+} from "../security/ssrf-guard.js";
 import type { BuiltinTool } from "./builtin-tools.js";
 
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -9,7 +13,7 @@ const USER_AGENT = "Haya/0.1.0 (link-preview)";
 // ---------------------------------------------------------------------------
 
 function extractTitle(html: string): string | undefined {
-  const match = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+  const match = /<title[^>]{0,2000}>([\s\S]*?)<\/title>/i.exec(html);
   return match ? decodeEntities(match[1].trim()) : undefined;
 }
 
@@ -20,11 +24,11 @@ function extractMetaContent(
 ): string | undefined {
   // Match both orders: name/property before content, and content before name/property
   const pattern1 = new RegExp(
-    `<meta\\s+[^>]*${attrName}=["']${escapeRegex(attrValue)}["'][^>]*content=["']([^"']*)["'][^>]*/?>`,
+    `<meta\\s+[^>]{0,2000}${attrName}=["']${escapeRegex(attrValue)}["'][^>]{0,2000}content=["']([^"']*)["'][^>]{0,2000}/?>`,
     "i",
   );
   const pattern2 = new RegExp(
-    `<meta\\s+[^>]*content=["']([^"']*)["'][^>]*${attrName}=["']${escapeRegex(attrValue)}["'][^>]*/?>`,
+    `<meta\\s+[^>]{0,2000}content=["']([^"']*)["'][^>]{0,2000}${attrName}=["']${escapeRegex(attrValue)}["'][^>]{0,2000}/?>`,
     "i",
   );
 
@@ -141,6 +145,8 @@ const linkPreviewTool: BuiltinTool = {
     }
 
     try {
+      await assertNotPrivateUrl(url);
+
       const response = await fetch(url, {
         headers: { "User-Agent": USER_AGENT },
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -155,10 +161,14 @@ const linkPreviewTool: BuiltinTool = {
       }
 
       const html = await response.text();
-      const metadata = extractMetadata(html, url);
+      const searchHtml = html.slice(0, 102_400);
+      const metadata = extractMetadata(searchHtml, url);
 
       return JSON.stringify(metadata);
     } catch (err) {
+      if (err instanceof SsrfViolationError) {
+        return JSON.stringify({ error: err.message });
+      }
       const message = err instanceof Error ? err.message : String(err);
       return JSON.stringify({ error: message, url });
     }

@@ -237,4 +237,45 @@ describe("code_eval", () => {
     });
     expect(result).toContain("a b c");
   });
+
+  it("sandbox does not leak prototype pollution vectors", async () => {
+    const tool = getTool();
+    // With Object.create(null), the sandbox has no prototype chain that could
+    // be exploited for prototype pollution attacks.
+    // Verify that __proto__ manipulation does not affect Object prototype.
+    const result = await tool.execute({
+      code: 'const before = ({}).x; this.__proto__ = { x: "polluted" }; ({}).x === before',
+    });
+    expect(result).toBe("Result: true");
+  });
+
+  it("sandbox console is frozen (strict mode rejects reassignment)", async () => {
+    const tool = getTool();
+    // Object.freeze prevents property modification. In strict mode this throws.
+    const result = await tool.execute({
+      code: '"use strict"; try { console.log = function(){}; "writable" } catch(e) { "frozen" }',
+    });
+    expect(result).toBe("Result: frozen");
+  });
+
+  it("sandbox console is frozen (sloppy mode silently ignores reassignment)", async () => {
+    const tool = getTool();
+    // In sloppy mode, assignment to frozen property silently fails
+    const result = await tool.execute({
+      code: 'const original = console.log; console.log = function(){}; console.log === original',
+    });
+    expect(result).toBe("Result: true");
+  });
+
+  it("prevents microtask-based timeout bypass", async () => {
+    const tool = getTool();
+    // With microtaskMode: "afterEvaluate", queued microtasks run within the
+    // timeout budget rather than escaping it.
+    const result = await tool.execute({
+      code: "Promise.resolve().then(() => { while(true) {} }); 1",
+      timeout: 200,
+    });
+    // Should either return the sync result or timeout - either way should not hang
+    expect(result).toMatch(/Result: 1|Error:/);
+  });
 });

@@ -399,7 +399,7 @@ describe("createSystemTools", () => {
       Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });
     });
 
-    it("uses PowerShell on Windows", async () => {
+    it("uses PowerShell EncodedCommand on Windows with env var for path", async () => {
       const originalPlatform = process.platform;
       Object.defineProperty(process, "platform", { value: "win32", writable: true });
 
@@ -409,9 +409,14 @@ describe("createSystemTools", () => {
 
       expect(execFileSync).toHaveBeenCalledWith(
         "powershell.exe",
-        ["-Command", expect.stringContaining("System.Windows.Forms")],
-        { shell: false },
+        ["-EncodedCommand", expect.any(String)],
+        { shell: false, env: expect.objectContaining({ HAYA_SCREENSHOT_PATH: "C:\\tmp\\shot.png" }) },
       );
+      // Verify the encoded script does NOT contain the output path directly
+      const encodedScript = execFileSync.mock.calls[0][1][1];
+      const decodedScript = Buffer.from(encodedScript, "base64").toString("utf16le");
+      expect(decodedScript).toContain("$env:HAYA_SCREENSHOT_PATH");
+      expect(decodedScript).not.toContain("C:\\tmp\\shot.png");
       expect(result).toBe("Screenshot saved to C:\\tmp\\shot.png");
 
       Object.defineProperty(process, "platform", { value: originalPlatform, writable: true });

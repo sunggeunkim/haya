@@ -43,6 +43,9 @@ export function createVisionTools(): BuiltinTool[] {
           throw new Error(`Unsupported protocol: ${parsed.protocol}`);
         }
 
+        const { assertNotPrivateUrl } = await import("../security/ssrf-guard.js");
+        await assertNotPrivateUrl(url);
+
         return prompt
           ? `Please analyze this image: ${url}\n\nFocus on: ${prompt}`
           : `Please analyze this image: ${url}`;

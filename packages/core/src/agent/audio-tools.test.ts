@@ -8,6 +8,7 @@ vi.mock("../config/secrets.js", () => ({
 
 vi.mock("node:fs", () => ({
   readFileSync: vi.fn().mockReturnValue(Buffer.from("fake-audio-data")),
+  statSync: vi.fn().mockReturnValue({ size: 1024 }),
 }));
 
 function getTool(tools: AgentTool[], name: string): AgentTool {
@@ -61,6 +62,7 @@ describe("audio_transcribe", () => {
     (fs.readFileSync as ReturnType<typeof vi.fn>).mockReturnValue(
       Buffer.from("fake-audio-data"),
     );
+    (fs.statSync as ReturnType<typeof vi.fn>).mockReturnValue({ size: 1024 });
   });
 
   afterEach(() => {
@@ -208,5 +210,35 @@ describe("audio_transcribe", () => {
       .calls[0] as [string, RequestInit];
     const body = callArgs[1].body as FormData;
     expect(body.get("model")).toBe("whisper-1");
+  });
+
+  // -------------------------------------------------------------------------
+  // File size limit
+  // -------------------------------------------------------------------------
+
+  it("rejects audio files larger than 25MB", async () => {
+    const fs = await import("node:fs");
+    (fs.statSync as ReturnType<typeof vi.fn>).mockReturnValue({
+      size: 30 * 1024 * 1024,
+    });
+
+    await expect(
+      tool.execute({ file_path: "/tmp/large.mp3" }),
+    ).rejects.toThrow("exceeds 25MB Whisper API limit");
+  });
+
+  it("allows audio files under 25MB", async () => {
+    const fs = await import("node:fs");
+    (fs.statSync as ReturnType<typeof vi.fn>).mockReturnValue({
+      size: 20 * 1024 * 1024,
+    });
+
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ text: "transcribed" }),
+    });
+
+    const result = await tool.execute({ file_path: "/tmp/normal.mp3" });
+    expect(result).toBe("transcribed");
   });
 });
