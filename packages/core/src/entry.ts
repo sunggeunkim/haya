@@ -125,12 +125,34 @@ program
       const toolPolicies = config.agent.toolPolicies ?? [];
       const policyEngine = new ToolPolicyEngine(toolPolicies);
 
-      // Initialize agent runtime for channel messages
-      const provider = createProvider({
-        provider: "openai",
-        model: config.agent.defaultModel,
-        apiKeyEnvVar: config.agent.defaultProviderApiKeyEnvVar,
-      });
+      // Initialize AI provider(s)
+      let provider: import("./agent/providers.js").AIProvider;
+      if (config.agent.providers && config.agent.providers.length > 0) {
+        const { FallbackProvider } = await import("./agent/provider-chain.js");
+        const entries = config.agent.providers.map((entry) => ({
+          provider: createProvider({
+            provider: entry.name,
+            model: config.agent.defaultModel,
+            apiKeyEnvVar: entry.apiKeyEnvVar,
+            baseUrl: entry.baseUrl,
+          }),
+          models: entry.models,
+        }));
+        provider = new FallbackProvider(entries);
+        log.info(`Provider fallback chain: ${provider.name}`);
+      } else {
+        const providerName = config.agent.defaultProvider ?? "openai";
+        provider = createProvider({
+          provider: providerName,
+          model: config.agent.defaultModel,
+          ...(config.agent.defaultProviderApiKeyEnvVar
+            ? { apiKeyEnvVar: config.agent.defaultProviderApiKeyEnvVar }
+            : providerName !== "bedrock"
+              ? { apiKeyEnvVar: `${providerName.toUpperCase()}_API_KEY` }
+              : {}),
+          ...(config.agent.awsRegion && { awsRegion: config.agent.awsRegion }),
+        });
+      }
       const { builtinTools, createSessionTools } = await import(
         "./agent/builtin-tools.js"
       );

@@ -10,6 +10,12 @@ const PROVIDER_KEY_DEFAULTS: Record<string, string> = {
   custom: "API_KEY",
 };
 
+const DEFAULT_MODELS: Record<string, string> = {
+  openai: "gpt-4o",
+  anthropic: "claude-sonnet-4-20250514",
+  bedrock: "anthropic.claude-sonnet-4-20250514-v1:0",
+};
+
 /**
  * Run the interactive onboarding wizard.
  * Walks the user through setting up a haya.json config file.
@@ -41,18 +47,40 @@ export async function runOnboardWizard(): Promise<void> {
     // Step 1: AI provider
     const provider = await askChoice(
       rl,
-      "Select your AI provider (openai / anthropic / custom)",
-      ["openai", "anthropic", "custom"],
+      "Select your AI provider (openai / anthropic / bedrock / custom)",
+      ["openai", "anthropic", "bedrock", "custom"],
       "openai",
     );
 
-    // Step 2: API key env var
-    const defaultKeyVar = PROVIDER_KEY_DEFAULTS[provider] ?? "API_KEY";
-    const apiKeyVar = await askString(
-      rl,
-      `API key environment variable name [${defaultKeyVar}]`,
-      defaultKeyVar,
-    );
+    // Step 2: Provider-specific config
+    let apiKeyVar: string | undefined;
+    let awsRegion: string | undefined;
+    let model: string | undefined;
+
+    if (provider === "bedrock") {
+      // Bedrock uses AWS credential chain, no API key needed
+      awsRegion = await askString(
+        rl,
+        "AWS region [us-east-1]",
+        "us-east-1",
+      );
+      const defaultModel = DEFAULT_MODELS.bedrock!;
+      model = await askString(
+        rl,
+        `Bedrock model ID [${defaultModel}]`,
+        defaultModel,
+      );
+      process.stdout.write(
+        "\nBedrock uses the AWS credential chain (env vars, ~/.aws/credentials, IAM roles).\n",
+      );
+    } else {
+      const defaultKeyVar = PROVIDER_KEY_DEFAULTS[provider] ?? "API_KEY";
+      apiKeyVar = await askString(
+        rl,
+        `API key environment variable name [${defaultKeyVar}]`,
+        defaultKeyVar,
+      );
+    }
 
     // Step 3: Gateway port
     const portStr = await askString(
@@ -90,13 +118,22 @@ export async function runOnboardWizard(): Promise<void> {
     // Step 5: Write config
     process.stdout.write("\nWriting haya.json...\n");
 
-    const { generatedToken } = await initializeConfig("haya.json", apiKeyVar);
+    const { generatedToken } = await initializeConfig(
+      "haya.json",
+      apiKeyVar ?? "OPENAI_API_KEY",
+    );
 
     process.stdout.write("\n");
     process.stdout.write("Setup complete!\n");
     process.stdout.write("\n");
     process.stdout.write("Next steps:\n");
-    process.stdout.write(`  1. Set your API key:  export ${apiKeyVar}=<your-key>\n`);
+    if (provider === "bedrock") {
+      process.stdout.write(
+        "  1. Set AWS credentials: export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=...\n",
+      );
+    } else {
+      process.stdout.write(`  1. Set your API key:  export ${apiKeyVar}=<your-key>\n`);
+    }
     process.stdout.write(`  2. Start the gateway: npx haya start\n`);
     process.stdout.write(`  3. Run diagnostics:   npx haya doctor\n`);
     process.stdout.write("\n");

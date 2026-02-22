@@ -1,10 +1,11 @@
 import { z } from "zod";
 import type { AgentRuntime } from "../../agent/runtime.js";
 import type { HistoryManager } from "../../sessions/history.js";
-import type { MethodHandler } from "../server-ws.js";
+import type { ClientEventSender, MethodHandler } from "../server-ws.js";
 
 /**
  * chat.send — Send a message and get an AI response.
+ * Streams intermediate deltas as `chat.delta` events when available.
  */
 
 const ChatSendParamsSchema = z.object({
@@ -18,10 +19,16 @@ export function createChatSendHandler(
   runtime: AgentRuntime,
   history: HistoryManager,
 ): MethodHandler {
-  return async (params) => {
+  return async (params, _clientId, send) => {
     const parsed = ChatSendParamsSchema.parse(params);
 
     const sessionHistory = history.getHistory(parsed.sessionId);
+
+    const onChunk = send
+      ? (chunk: { sessionId: string; delta: string; done: boolean }) => {
+          send("chat.delta", chunk);
+        }
+      : undefined;
 
     const response = await runtime.chat(
       {
@@ -31,6 +38,7 @@ export function createChatSendHandler(
         systemPrompt: parsed.systemPrompt,
       },
       sessionHistory,
+      onChunk,
     );
 
     // Persist the user message and assistant response

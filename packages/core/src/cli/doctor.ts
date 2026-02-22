@@ -129,8 +129,33 @@ function checkEnvironmentVariables(
     };
   }
 
-  // Determine which API key env var to check based on config
   const agent = config.agent as Record<string, unknown> | undefined;
+  const provider = (agent?.defaultProvider as string | undefined) ?? "openai";
+
+  // Bedrock uses AWS credential chain instead of an API key
+  if (provider === "bedrock") {
+    const hasAccessKey = !!process.env.AWS_ACCESS_KEY_ID;
+    const hasProfile = !!process.env.AWS_PROFILE;
+    // On EC2/ECS/Lambda, credentials come from IAM roles (no env var needed).
+    // We check for common indicators but pass if none are found with a hint.
+    if (hasAccessKey || hasProfile) {
+      return {
+        name: "Environment variables",
+        status: "pass",
+        message: hasAccessKey
+          ? "AWS_ACCESS_KEY_ID is set"
+          : "AWS_PROFILE is set",
+      };
+    }
+    return {
+      name: "Environment variables",
+      status: "warn",
+      message:
+        "No AWS_ACCESS_KEY_ID or AWS_PROFILE found. If running on EC2/ECS/Lambda, IAM role credentials will be used automatically.",
+    };
+  }
+
+  // Non-bedrock providers: check API key env var
   const envVarName =
     (agent?.defaultProviderApiKeyEnvVar as string | undefined) ??
     "OPENAI_API_KEY";

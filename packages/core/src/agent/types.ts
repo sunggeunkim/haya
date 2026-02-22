@@ -60,10 +60,16 @@ export interface TokenUsage {
 export interface ProviderConfig {
   provider: string;
   model: string;
-  apiKeyEnvVar: string;
+  apiKeyEnvVar?: string;
   baseUrl?: string;
   maxTokens?: number;
   temperature?: number;
+  retryOptions?: {
+    maxRetries?: number;
+    initialDelayMs?: number;
+    maxDelayMs?: number;
+  };
+  awsRegion?: string;
 }
 
 export interface CompletionRequest {
@@ -82,3 +88,8 @@ export interface CompletionResponse {
 }
 
 export type StreamCallback = (chunk: ChatChunkEvent) => void;
+
+export interface StreamDelta {
+  content?: string;
+  toolCalls?: Partial<ToolCall>[];
+}

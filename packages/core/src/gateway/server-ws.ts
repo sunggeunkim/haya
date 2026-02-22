@@ -11,6 +11,7 @@ import {
 import type { AuthRateLimiter } from "./auth-rate-limit.js";
 import {
   buildErrorResponse,
+  buildEvent,
   buildResponse,
   parseRequest,
   serializeFrame,
@@ -21,9 +22,12 @@ import { ErrorCodes } from "./protocol/types.js";
  * WebSocket server handler with protocol validation and authentication.
  */
 
+export type ClientEventSender = (event: string, data: unknown) => void;
+
 export type MethodHandler = (
   params: Record<string, unknown> | undefined,
   clientId: string,
+  send?: ClientEventSender,
 ) => Promise<unknown> | unknown;
 
 export interface WsServerOptions {
@@ -108,7 +112,12 @@ export function createGatewayWsServer(
       }
 
       try {
-        const result = await handler(params, clientId);
+        const send: ClientEventSender = (event, data) => {
+          if (ws.readyState === ws.OPEN) {
+            ws.send(serializeFrame(buildEvent(event, data)));
+          }
+        };
+        const result = await handler(params, clientId, send);
         ws.send(serializeFrame(buildResponse(id, result)));
       } catch (err) {
         const message =

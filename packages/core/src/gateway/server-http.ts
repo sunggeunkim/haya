@@ -6,7 +6,8 @@ import {
 } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import type { TlsOptions } from "node:tls";
-import { buildCspHeader, generateCspNonce } from "./csp.js";
+import { buildCspHeader, buildWebChatCspHeader, generateCspNonce } from "./csp.js";
+import { handleWebChatRequest } from "./webchat/serve.js";
 
 /**
  * Express-free HTTP server with security headers.
@@ -16,6 +17,10 @@ import { buildCspHeader, generateCspNonce } from "./csp.js";
 
 export interface HttpServerOptions {
   tls?: TlsOptions;
+  /** Override the host used in WebSocket URLs for the web chat UI. */
+  host?: string;
+  /** Override the port used in WebSocket URLs for the web chat UI. */
+  port?: number;
   onRequest?: (req: IncomingMessage, res: ServerResponse) => void;
 }
 
@@ -26,7 +31,28 @@ export function createGatewayHttpServer(
   options?: HttpServerOptions,
 ): HttpServer {
   const handler = (req: IncomingMessage, res: ServerResponse) => {
-    applySecurityHeaders(res);
+    const nonce = generateCspNonce();
+    const url = req.url?.split("?")[0];
+
+    // Web chat routes get a relaxed CSP that allows ws: for local dev
+    const isWebChat = url === "/chat" || url === "/chat/";
+
+    applySecurityHeaders(res, nonce, isWebChat);
+
+    // Try web chat route first
+    if (req.method === "GET" && isWebChat) {
+      const wsProtocol = options?.tls ? "wss" : "ws";
+      const chatHost = options?.host ?? "127.0.0.1";
+      const chatPort = resolvePort(options?.port, res);
+
+      handleWebChatRequest(req, res, {
+        nonce,
+        wsProtocol: wsProtocol as "ws" | "wss",
+        host: chatHost,
+        port: chatPort,
+      });
+      return;
+    }
 
     if (options?.onRequest) {
       options.onRequest(req, res);
@@ -52,12 +78,23 @@ export function createGatewayHttpServer(
 }
 
 /**
- * Apply security headers to every HTTP response.
+ * Resolve the port number. If explicitly set, use that. Otherwise try to
+ * read it from the server's socket.
  */
-function applySecurityHeaders(res: ServerResponse): void {
-  const nonce = generateCspNonce();
+function resolvePort(configured: number | undefined, res: ServerResponse): number {
+  if (configured !== undefined) return configured;
+  const addr = res.socket?.localPort;
+  return addr ?? 0;
+}
 
-  res.setHeader("Content-Security-Policy", buildCspHeader(nonce));
+/**
+ * Apply security headers to every HTTP response.
+ * For web chat pages, a relaxed CSP allowing ws: is used.
+ */
+function applySecurityHeaders(res: ServerResponse, nonce: string, webChat: boolean): void {
+  const csp = webChat ? buildWebChatCspHeader(nonce) : buildCspHeader(nonce);
+
+  res.setHeader("Content-Security-Policy", csp);
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("X-XSS-Protection", "0");

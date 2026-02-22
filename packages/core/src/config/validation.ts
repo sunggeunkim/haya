@@ -46,6 +46,24 @@ export function validateConfig(config: AssistantConfig): void {
     }
   }
 
+  // Provider-specific validation
+  const provider = (config.agent as Record<string, unknown>).defaultProvider as string | undefined ?? "openai";
+
+  if (provider === "bedrock") {
+    const awsRegion = (config.agent as Record<string, unknown>).awsRegion as string | undefined;
+    if (!awsRegion && !process.env.AWS_REGION && !process.env.AWS_DEFAULT_REGION) {
+      errors.push(
+        'Bedrock provider requires an AWS region. Set agent.awsRegion in config or the AWS_REGION / AWS_DEFAULT_REGION environment variable.',
+      );
+    }
+  } else {
+    if (!config.agent.defaultProviderApiKeyEnvVar) {
+      errors.push(
+        `Provider "${provider}" requires agent.defaultProviderApiKeyEnvVar to be set.`,
+      );
+    }
+  }
+
   if (errors.length > 0) {
     throw new ConfigValidationError(errors);
   }

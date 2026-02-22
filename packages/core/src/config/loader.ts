@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { chmod, stat } from "node:fs/promises";
 import { dirname } from "node:path";
+import JSON5 from "json5";
 import { AssistantConfigSchema } from "./schema.js";
 import type { AssistantConfig } from "./types.js";
 import { validateConfig } from "./validation.js";
@@ -9,7 +10,7 @@ import { validateConfig } from "./validation.js";
 const CONFIG_FILE_MODE = 0o600;
 
 /**
- * Load and validate config from a JSON file.
+ * Load and validate config from a JSON or JSON5 file.
  * Enforces 0o600 file permissions to protect secrets references.
  */
 export async function loadConfig(filePath: string): Promise<AssistantConfig> {
@@ -22,9 +23,9 @@ export async function loadConfig(filePath: string): Promise<AssistantConfig> {
   const raw = readFileSync(filePath, "utf-8");
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    parsed = JSON5.parse(raw);
   } catch {
-    throw new Error(`Config file is not valid JSON: ${filePath}`);
+    throw new Error(`Config file is not valid JSON or JSON5: ${filePath}`);
   }
 
   const result = AssistantConfigSchema.safeParse(parsed);

@@ -48,6 +48,9 @@ The agent runtime manages AI interactions:
 - **Runtime** (`runtime.ts`) -- Message -> AI -> response pipeline
 - **Providers** (`providers.ts`) -- AI provider abstraction (OpenAI, Anthropic, etc.)
 - **Tools** (`tools.ts`) -- Tool execution framework for function calling
+- **Google Calendar** (`google-calendar-tools.ts`) -- 7 tools (list/search/create/update/delete events, list calendars, freebusy)
+- **Gmail** (`google-gmail-tools.ts`) -- 6 tools (search, read, thread, labels, draft, send draft)
+- **Google Drive** (`google-drive-tools.ts`) -- 5 tools (search, read, list folder, create, share)
 
 ### Session management
 
@@ -87,6 +90,15 @@ Scheduled job execution:
 
 - **Service** (`service.ts`) -- Job scheduling with croner, dynamic add/remove
 - **Store** (`store.ts`) -- Job persistence to JSON file
+
+### Google OAuth
+
+Shared OAuth2 authentication for Google Calendar, Gmail, and Drive tools:
+
+- **Auth** (`google/auth.ts`) -- Token lifecycle: auto-refresh, browser consent flow, token storage (`0o600`), revocation
+- No external OAuth libraries -- uses native `fetch()` for token refresh and `http.createServer()` for the consent callback
+- Configurable via `tools.google` in `haya.json`; credentials via `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` env vars
+- CLI: `haya google auth` (interactive consent) and `haya google revoke` (token cleanup)
 
 ### Config system
 

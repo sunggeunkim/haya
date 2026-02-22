@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createProvider } from "./providers.js";
+import { ProviderHttpError, RetryableProviderError } from "./retry.js";
 
 describe("createProvider", () => {
   afterEach(() => {
@@ -163,17 +164,18 @@ describe("OpenAI complete()", () => {
     expect(result.message.toolCalls![0].arguments).toBe('{"city":"SF"}');
   });
 
-  it("throws on non-ok response with status code", async () => {
+  it("throws on non-retryable error response", async () => {
     vi.stubEnv("TEST_OPENAI_KEY", "sk-test-123");
 
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("rate limited", { status: 429 }),
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      () => Promise.resolve(new Response("bad request", { status: 400 })),
     );
 
     const provider = createProvider({
       provider: "openai",
       model: "gpt-4o",
       apiKeyEnvVar: "TEST_OPENAI_KEY",
+      retryOptions: { maxRetries: 0 },
     });
 
     await expect(
@@ -181,7 +183,31 @@ describe("OpenAI complete()", () => {
         model: "gpt-4o",
         messages: [{ role: "user", content: "hi" }],
       }),
-    ).rejects.toThrow(/429/);
+    ).rejects.toThrow(ProviderHttpError);
+  });
+
+  it("retries and throws on persistent retryable error", async () => {
+    vi.stubEnv("TEST_OPENAI_KEY", "sk-test-123");
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+      () => Promise.resolve(new Response("rate limited", { status: 429 })),
+    );
+
+    const provider = createProvider({
+      provider: "openai",
+      model: "gpt-4o",
+      apiKeyEnvVar: "TEST_OPENAI_KEY",
+      retryOptions: { maxRetries: 1, initialDelayMs: 10 },
+    });
+
+    await expect(
+      provider.complete({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    ).rejects.toThrow(RetryableProviderError);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2); // initial + 1 retry
   });
 });
 

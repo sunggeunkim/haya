@@ -122,7 +122,7 @@ describe("AssistantConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects config without agent.defaultProviderApiKeyEnvVar", () => {
+  it("accepts config without agent.defaultProviderApiKeyEnvVar (optional)", () => {
     const result = AssistantConfigSchema.safeParse({
       gateway: {
         auth: {
@@ -134,7 +134,7 @@ describe("AssistantConfigSchema", () => {
         defaultModel: "gpt-4o",
       },
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 
   it("accepts full config with all optional fields", () => {

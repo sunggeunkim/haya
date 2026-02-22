@@ -71,6 +71,7 @@ Messaging Channels (Slack, Discord, Telegram)
 +-----------------------------------------------+
         |
         +---> Agent Runtime ---> AI Provider APIs
+        |       +---> Google Tools (Calendar, Gmail, Drive)
         +---> Session Manager ---> JSONL on disk
         +---> Memory Manager ---> SQLite + sqlite-vec
         +---> Cron Service ---> Scheduled automation
@@ -84,6 +85,9 @@ See [docs/architecture.md](docs/architecture.md) for the full system design.
 ```
 packages/
   core/           Main application (gateway, agent, config, security)
+    src/
+      google/     Google OAuth2 auth layer (shared by Calendar/Gmail/Drive)
+      agent/      AI runtime, tools (incl. google-calendar/gmail/drive-tools)
   plugin-sdk/     SDK for plugin authors
 
 extensions/
@@ -111,6 +115,8 @@ pnpm dev channels list                      # List channels
 pnpm dev cron list                          # List cron jobs
 pnpm dev cron add -n "daily" -s "0 9 * * *" -a "summarize"  # Add job
 pnpm dev config show                        # Show config (redacted)
+pnpm dev google auth                        # Google OAuth consent flow
+pnpm dev google revoke                      # Revoke Google tokens
 ```
 
 ## Security
@@ -130,6 +136,7 @@ Run `pnpm audit:security` to verify. See [docs/security.md](docs/security.md) fo
 - [Security](docs/security.md) -- Security model and vulnerability fixes
 - [API Reference](docs/api.md) -- Gateway protocol and methods
 - [Plugin Development](docs/plugins.md) -- Building plugins with the SDK
+- [Google Setup](docs/google-setup.md) -- Google Calendar, Gmail & Drive setup
 - [Slack Setup](docs/slack-setup.md) -- Slack integration guide
 - [Teams Setup](docs/teams-setup.md) -- Microsoft Teams integration guide
 - [Onboarding](docs/onboarding.md) -- Getting started for new developers

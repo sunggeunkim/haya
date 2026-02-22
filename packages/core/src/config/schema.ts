@@ -64,6 +64,13 @@ export const ToolsConfigSchema = z.object({
   google: GoogleConfigSchema.optional(),
 });
 
+export const ProviderEntrySchema = z.object({
+  name: z.string(),
+  apiKeyEnvVar: z.string(),
+  baseUrl: z.string().optional(),
+  models: z.array(z.string()).optional(),
+});
+
 export const ToolPolicySchema = z.object({
   toolName: z.string(),
   level: z.enum(["allow", "confirm", "deny"]),
@@ -86,6 +93,15 @@ export const BudgetSchema = z.object({
   maxRequestsPerDay: z.number().int().min(0).optional(),
 });
 
+export const ObservabilitySchema = z.object({
+  enabled: z.boolean().default(false),
+  otlp: z.object({
+    endpoint: z.string(),
+    headersEnvVar: z.string().optional(),
+  }).optional(),
+  serviceName: z.string().default("haya"),
+});
+
 export const AssistantConfigSchema = z.object({
   gateway: z.object({
     port: z.number().int().min(1).max(65535).default(18789),
@@ -95,15 +111,19 @@ export const AssistantConfigSchema = z.object({
     trustedProxies: z.array(z.string()).default([]),
   }),
   agent: z.object({
+    defaultProvider: z.string().default("openai"),
     defaultModel: z.string().default("gpt-4o"),
-    defaultProviderApiKeyEnvVar: z.string(),
+    defaultProviderApiKeyEnvVar: z.string().optional(),
+    awsRegion: z.string().optional(),
     systemPrompt: z
       .string()
       .default(
         "You are a helpful assistant responding to users in a chat conversation. Reply directly and concisely.",
       ),
+    systemPromptFiles: z.array(z.string()).optional(),
     maxHistoryMessages: z.number().int().min(0).default(100),
     workspace: z.string().optional(),
+    providers: z.array(ProviderEntrySchema).optional(),
     toolPolicies: z.array(ToolPolicySchema).default([]),
     maxContextTokens: z.number().int().min(1000).optional(),
   }),
@@ -117,4 +137,5 @@ export const AssistantConfigSchema = z.object({
   plugins: z.array(z.string()).default([]),
   logging: LoggingSchema.optional(),
   tools: ToolsConfigSchema.optional(),
+  observability: ObservabilitySchema.optional(),
 });

@@ -32,6 +32,9 @@ Fill in the required values:
 | `SLACK_BOT_TOKEN` | No | Slack bot token (for Slack channel) |
 | `SLACK_APP_TOKEN` | No | Slack app token for Socket Mode |
 | `SLACK_SIGNING_SECRET` | No | Slack signing secret |
+| `GOOGLE_CLIENT_ID` | No | Google OAuth client ID (for Calendar/Gmail/Drive) |
+| `GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
+| `GOOGLE_REFRESH_TOKEN` | No | Pre-configured refresh token (skips browser consent) |
 | `EMBEDDING_API_KEY` | No | Embedding provider key (for memory vector search) |
 
 ## Running locally
@@ -50,7 +53,7 @@ pnpm dev start --config path/to/config.json
 ## Running tests
 
 ```bash
-pnpm test              # Run all tests (currently 485)
+pnpm test              # Run all tests
 pnpm test:watch        # Watch mode
 pnpm test:coverage     # With coverage report
 pnpm lint              # Type check
@@ -79,6 +82,7 @@ haya/
         gateway/             HTTP server, WebSocket, auth, TLS, CSP
         security/            Secret comparison, command exec, sandbox, audit
         agent/               AI runtime, providers, tool execution
+        google/              Google OAuth2 auth (shared by Calendar/Gmail/Drive)
         sessions/            Session store, history (JSONL)
         memory/              SQLite + sqlite-vec hybrid search
         plugins/             Plugin registry, loader, hooks
@@ -132,6 +136,16 @@ Plugins run in `worker_threads` with Node.js 22+ permission model. They communic
 3. Use `ChannelRuntime.onMessage` to deliver inbound messages
 4. Wrap external content with `wrapExternalContent()` before passing to the agent
 5. See [slack-setup.md](slack-setup.md) for a concrete example
+
+### Set up Google tools (Calendar, Gmail, Drive)
+
+1. Create OAuth credentials in [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Enable Calendar API, Gmail API, and Drive API
+3. Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to `.env`
+4. Enable desired services in `haya.json` under `tools.google`
+5. Run `pnpm dev google auth` to complete the OAuth consent flow
+
+See [google-setup.md](google-setup.md) for detailed instructions.
 
 ### Run security audit
 

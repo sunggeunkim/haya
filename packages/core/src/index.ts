@@ -6,6 +6,7 @@ export {
   SenderAuthSchema,
   SessionPruningSchema,
   GoogleConfigSchema,
+  ObservabilitySchema,
 } from "./config/schema.js";
 export type {
   AssistantConfig,
@@ -14,6 +15,7 @@ export type {
   GatewayTls,
   LoggingConfig,
   MemoryConfig,
+  ObservabilityConfig,
 } from "./config/types.js";
 export { DEFAULT_CONFIG } from "./config/defaults.js";
 export { resolveSecret, requireSecret } from "./config/secrets.js";
@@ -52,6 +54,13 @@ export {
   NotFoundError,
   RateLimitError,
 } from "./infra/errors.js";
+export {
+  initTelemetry,
+  getTracer,
+  getMeter,
+  shutdownTelemetry,
+} from "./infra/telemetry.js";
+export type { TelemetryConfig } from "./infra/telemetry.js";
 
 // Gateway
 export { createGateway } from "./gateway/server.js";
@@ -102,6 +111,7 @@ export { AgentRuntime } from "./agent/runtime.js";
 export type { AgentRuntimeConfig } from "./agent/runtime.js";
 export { createProvider } from "./agent/providers.js";
 export type { AIProvider } from "./agent/providers.js";
+export { createBedrockProvider } from "./agent/bedrock.js";
 export { ToolRegistry } from "./agent/tools.js";
 export { ToolPolicyEngine } from "./agent/tool-policy.js";
 export type {

@@ -1,5 +1,6 @@
 import type { Logger } from "tslog";
 import { createLogger } from "../infra/logger.js";
+import type { BudgetEnforcer } from "../sessions/budget.js";
 import type { AIProvider } from "./providers.js";
 import { ToolRegistry } from "./tools.js";
 import type {
@@ -7,8 +8,10 @@ import type {
   ChatRequest,
   ChatResponse,
   CompletionRequest,
+  CompletionResponse,
   Message,
   StreamCallback,
+  StreamDelta,
 } from "./types.js";
 
 /**
@@ -33,16 +36,18 @@ export class AgentRuntime {
   private readonly provider: AIProvider;
   private readonly config: AgentRuntimeConfig;
   private readonly logger: Logger<unknown>;
+  private readonly budgetEnforcer?: BudgetEnforcer;
 
   constructor(
     provider: AIProvider,
     config: AgentRuntimeConfig,
-    options?: { tools?: ToolRegistry; logger?: Logger<unknown> },
+    options?: { tools?: ToolRegistry; logger?: Logger<unknown>; budgetEnforcer?: BudgetEnforcer },
   ) {
     this.provider = provider;
     this.config = config;
     this.tools = options?.tools ?? new ToolRegistry();
     this.logger = options?.logger ?? createLogger("agent-runtime");
+    this.budgetEnforcer = options?.budgetEnforcer;
   }
 
   /**
@@ -54,6 +59,10 @@ export class AgentRuntime {
     history: Message[],
     onChunk?: StreamCallback,
   ): Promise<ChatResponse> {
+    if (this.budgetEnforcer) {
+      this.budgetEnforcer.enforce(request.sessionId);
+    }
+
     const model = request.model ?? this.config.defaultModel;
     const systemPrompt = request.systemPrompt ?? this.config.systemPrompt;
     const maxRounds = this.config.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
@@ -87,7 +96,27 @@ export class AgentRuntime {
       };
 
       this.logger.debug(`Completion round ${round}, model: ${model}`);
-      const response = await this.provider.complete(completionRequest);
+
+      let response: CompletionResponse;
+
+      // Use streaming when callback is provided and provider supports it
+      if (onChunk && this.provider.completeStream) {
+        const stream = this.provider.completeStream(completionRequest);
+        let streamResult: IteratorResult<StreamDelta, CompletionResponse>;
+        do {
+          streamResult = await stream.next();
+          if (!streamResult.done && streamResult.value.content) {
+            onChunk({
+              sessionId: request.sessionId,
+              delta: streamResult.value.content,
+              done: false,
+            });
+          }
+        } while (!streamResult.done);
+        response = streamResult.value;
+      } else {
+        response = await this.provider.complete(completionRequest);
+      }
 
       messages.push(response.message);
 
@@ -152,5 +181,12 @@ export class AgentRuntime {
       sessionId: request.sessionId,
       message: fallbackMessage,
     };
+  }
+
+  /**
+   * Hot-reload: update the system prompt at runtime.
+   */
+  updateSystemPrompt(prompt: string): void {
+    (this.config as { systemPrompt?: string }).systemPrompt = prompt;
   }
 }

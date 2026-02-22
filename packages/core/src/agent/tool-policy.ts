@@ -118,4 +118,15 @@ export class ToolPolicyEngine {
       level,
     }));
   }
+
+  /**
+   * Hot-reload: replace all policies with a new set.
+   * Clears existing policies and sets the provided ones.
+   */
+  replaceAllPolicies(policies: ToolPolicy[]): void {
+    this.policies.clear();
+    for (const p of policies) {
+      this.policies.set(p.toolName, p.level);
+    }
+  }
 }

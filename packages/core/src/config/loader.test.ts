@@ -26,6 +26,7 @@ const validConfig: AssistantConfig = {
     trustedProxies: [],
   },
   agent: {
+    defaultProvider: "openai",
     defaultModel: "gpt-4o",
     defaultProviderApiKeyEnvVar: "OPENAI_API_KEY",
     systemPrompt:
@@ -81,10 +82,12 @@ describe("saveConfig / loadConfig", () => {
     await expect(loadConfig(filePath)).rejects.toThrow(/Config file not found/);
   });
 
-  it("throws on invalid JSON", async () => {
+  it("throws on invalid JSON or JSON5", async () => {
     const filePath = join(tempDir, "bad.json");
     writeFileSync(filePath, "not json{", { mode: 0o600 });
-    await expect(loadConfig(filePath)).rejects.toThrow(/not valid JSON/);
+    await expect(loadConfig(filePath)).rejects.toThrow(
+      /not valid JSON or JSON5/,
+    );
   });
 
   it("throws on schema-invalid config", async () => {
@@ -105,6 +108,58 @@ describe("saveConfig / loadConfig", () => {
     await loadConfig(filePath);
     const stats = statSync(filePath);
     expect(stats.mode & 0o777).toBe(0o600);
+  });
+});
+
+describe("JSON5 config support", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = makeTempDir();
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("loads a config with JSON5 comments and trailing commas", async () => {
+    const filePath = join(tempDir, "config.json5");
+    const json5Content = `{
+  // Gateway configuration
+  gateway: {
+    port: 18789,
+    bind: "loopback",
+    auth: {
+      mode: "token",
+      token: "${"a".repeat(64)}",
+    },
+    trustedProxies: [],
+  },
+  /* Agent settings */
+  agent: {
+    defaultModel: "gpt-4o",
+    defaultProviderApiKeyEnvVar: "OPENAI_API_KEY",
+    systemPrompt: "You are a helpful assistant responding to users in a chat conversation. Reply directly and concisely.",
+    maxHistoryMessages: 100,
+    toolPolicies: [],
+  },
+  cron: [],
+  plugins: [],
+}`;
+    writeFileSync(filePath, json5Content, { mode: 0o600 });
+
+    const loaded = await loadConfig(filePath);
+    expect(loaded.gateway.port).toBe(18789);
+    expect(loaded.agent.defaultModel).toBe("gpt-4o");
+  });
+
+  it("still loads standard JSON configs", async () => {
+    const filePath = join(tempDir, "config.json");
+    writeFileSync(filePath, JSON.stringify(validConfig), { mode: 0o600 });
+
+    const loaded = await loadConfig(filePath);
+    expect(loaded.gateway.port).toBe(18789);
+    expect(loaded.gateway.auth.mode).toBe("token");
   });
 });
 

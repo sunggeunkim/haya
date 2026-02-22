@@ -1,3 +1,5 @@
+import { compactHistory } from "../agent/compaction.js";
+import { createSimpleTokenCounter } from "../agent/token-counter.js";
 import type { Message } from "../agent/types.js";
 import { SessionStore } from "./store.js";
 
@@ -18,18 +20,36 @@ export class HistoryManager {
   /**
    * Get the conversation history for a session, truncated to maxMessages.
    * Keeps the most recent messages.
+   * When options.maxTokens is provided, also compacts history to fit the token budget.
    */
-  getHistory(sessionId: string): Message[] {
+  getHistory(
+    sessionId: string,
+    options?: { maxTokens?: number; systemPromptTokens?: number },
+  ): Message[] {
     if (!this.store.exists(sessionId)) return [];
 
     const messages = this.store.readMessages(sessionId);
 
+    let result: Message[];
     if (messages.length <= this.maxMessages) {
-      return messages;
+      result = messages;
+    } else {
+      // Keep the most recent messages
+      result = messages.slice(-this.maxMessages);
     }
 
-    // Keep the most recent messages
-    return messages.slice(-this.maxMessages);
+    // Apply token-aware compaction if a budget is specified
+    if (options?.maxTokens) {
+      const counter = createSimpleTokenCounter();
+      result = compactHistory(result, {
+        maxTokens: options.maxTokens,
+        reserveForResponse: 4096,
+        systemPromptTokens: options.systemPromptTokens ?? 0,
+        recentMessageCount: 10,
+      }, counter);
+    }
+
+    return result;
   }
 
   /**
