@@ -59,11 +59,13 @@ export const GoogleConfigSchema = z.object({
     .default({ enabled: false }),
 });
 
-export const WebSearchConfigSchema = z.object({
-  provider: z.enum(["brave", "google"]),
+export const WebSearchProviderSchema = z.object({
+  provider: z.enum(["brave", "google", "tavily"]),
   apiKeyEnvVar: z.string(),
   searchEngineId: z.string().optional(),
 });
+
+export const WebSearchConfigSchema = z.array(WebSearchProviderSchema).min(1);
 
 export const ImageGenerationConfigSchema = z.object({
   provider: z.enum(["openai"]).default("openai"),

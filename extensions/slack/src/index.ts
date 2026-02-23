@@ -9,7 +9,7 @@ import type {
   OutboundMessage,
   ChannelCapabilities,
 } from "@haya/core";
-import { wrapExternalContent } from "@haya/core";
+import { wrapExternalContent, markdownToMrkdwn } from "@haya/core";
 import { resolveSlackConfig, requireEnv } from "./config.js";
 
 /**
@@ -126,9 +126,11 @@ export function createSlackChannel(): ChannelPlugin {
         throw new Error("Slack channel is not connected");
       }
 
+      const content = markdownToMrkdwn(message.content);
+
       const result = await webClient.chat.postMessage({
         channel: channelId,
-        text: message.content,
+        text: content,
         ...(message.threadId ? { thread_ts: message.threadId } : {}),
       });
 

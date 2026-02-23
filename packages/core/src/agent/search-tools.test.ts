@@ -7,13 +7,13 @@ vi.mock("../config/secrets.js", () => ({
 
 describe("createSearchTools", () => {
   it("returns one tool", () => {
-    const tools = createSearchTools({ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" });
+    const tools = createSearchTools([{ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" }]);
     expect(tools).toHaveLength(1);
     expect(tools[0].name).toBe("web_search");
   });
 
   it("tool has required fields", () => {
-    const tools = createSearchTools({ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" });
+    const tools = createSearchTools([{ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" }]);
     const tool = tools[0];
     expect(tool.name).toBeTruthy();
     expect(tool.description).toBeTruthy();
@@ -53,7 +53,7 @@ describe("web_search (brave)", () => {
       mockResponse,
     );
 
-    const tools = createSearchTools({ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" });
+    const tools = createSearchTools([{ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" }]);
     const search = tools[0];
     const result = await search.execute({ query: "test query" });
 
@@ -94,7 +94,7 @@ describe("web_search (brave)", () => {
       mockResponse,
     );
 
-    const tools = createSearchTools({ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" });
+    const tools = createSearchTools([{ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" }]);
     const result = await tools[0].execute({ query: "test" });
 
     expect(result).toContain("1. First");
@@ -112,7 +112,7 @@ describe("web_search (brave)", () => {
       mockResponse,
     );
 
-    const tools = createSearchTools({ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" });
+    const tools = createSearchTools([{ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" }]);
     const result = await tools[0].execute({ query: "nothing" });
     expect(result).toContain("No results found");
   });
@@ -126,7 +126,7 @@ describe("web_search (brave)", () => {
       mockResponse,
     );
 
-    const tools = createSearchTools({ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" });
+    const tools = createSearchTools([{ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" }]);
     const result = await tools[0].execute({ query: "test" });
     expect(result).toContain("No results found");
   });
@@ -141,14 +141,14 @@ describe("web_search (brave)", () => {
       mockResponse,
     );
 
-    const tools = createSearchTools({ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" });
+    const tools = createSearchTools([{ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" }]);
     await expect(tools[0].execute({ query: "test" })).rejects.toThrow(
       "Brave Search API HTTP 429",
     );
   });
 
   it("throws if query is missing", async () => {
-    const tools = createSearchTools({ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" });
+    const tools = createSearchTools([{ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" }]);
     await expect(tools[0].execute({})).rejects.toThrow("query is required");
   });
 
@@ -161,7 +161,7 @@ describe("web_search (brave)", () => {
       mockResponse,
     );
 
-    const tools = createSearchTools({ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" });
+    const tools = createSearchTools([{ provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" }]);
     await tools[0].execute({ query: "test", count: 50 });
 
     const callUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
@@ -198,11 +198,11 @@ describe("web_search (google)", () => {
       mockResponse,
     );
 
-    const tools = createSearchTools({
+    const tools = createSearchTools([{
       provider: "google",
       apiKeyEnvVar: "GOOGLE_CSE_API_KEY",
       searchEngineId: "my-search-engine-id",
-    });
+    }]);
     const result = await tools[0].execute({ query: "test query" });
 
     const callUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
@@ -231,11 +231,11 @@ describe("web_search (google)", () => {
       mockResponse,
     );
 
-    const tools = createSearchTools({
+    const tools = createSearchTools([{
       provider: "google",
       apiKeyEnvVar: "GOOGLE_CSE_API_KEY",
       searchEngineId: "cse-id",
-    });
+    }]);
     const result = await tools[0].execute({ query: "test" });
 
     expect(result).toContain("1. First");
@@ -251,11 +251,11 @@ describe("web_search (google)", () => {
       mockResponse,
     );
 
-    const tools = createSearchTools({
+    const tools = createSearchTools([{
       provider: "google",
       apiKeyEnvVar: "GOOGLE_CSE_API_KEY",
       searchEngineId: "cse-id",
-    });
+    }]);
     const result = await tools[0].execute({ query: "nothing" });
     expect(result).toContain("No results found");
   });
@@ -270,21 +270,21 @@ describe("web_search (google)", () => {
       mockResponse,
     );
 
-    const tools = createSearchTools({
+    const tools = createSearchTools([{
       provider: "google",
       apiKeyEnvVar: "GOOGLE_CSE_API_KEY",
       searchEngineId: "cse-id",
-    });
+    }]);
     await expect(tools[0].execute({ query: "test" })).rejects.toThrow(
       "Google CSE API HTTP 403",
     );
   });
 
   it("throws if searchEngineId is missing for Google provider", async () => {
-    const tools = createSearchTools({
+    const tools = createSearchTools([{
       provider: "google",
       apiKeyEnvVar: "GOOGLE_CSE_API_KEY",
-    });
+    }]);
     await expect(tools[0].execute({ query: "test" })).rejects.toThrow(
       "searchEngineId is required for the Google CSE provider",
     );
@@ -299,15 +299,218 @@ describe("web_search (google)", () => {
       mockResponse,
     );
 
-    const tools = createSearchTools({
+    const tools = createSearchTools([{
       provider: "google",
       apiKeyEnvVar: "GOOGLE_CSE_API_KEY",
       searchEngineId: "cse-id",
-    });
+    }]);
     await tools[0].execute({ query: "test", count: 50 });
 
     const callUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
       .calls[0][0] as string;
     expect(callUrl).toContain("num=10");
+  });
+});
+
+describe("web_search (tavily)", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("calls Tavily Search API with correct params", async () => {
+    const mockResponse = {
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        results: [
+          {
+            title: "Tavily Result",
+            url: "https://tavily-result.com",
+            content: "A Tavily search result",
+          },
+        ],
+      }),
+    };
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      mockResponse,
+    );
+
+    const tools = createSearchTools([{
+      provider: "tavily",
+      apiKeyEnvVar: "TAVILY_API_KEY",
+    }]);
+    const result = await tools[0].execute({ query: "test query" });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "https://api.tavily.com/search",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer test-api-key",
+        }),
+      }),
+    );
+
+    const body = JSON.parse(
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body,
+    );
+    expect(body.query).toBe("test query");
+    expect(body.max_results).toBe(5);
+
+    expect(result).toContain("Tavily Result");
+    expect(result).toContain("https://tavily-result.com");
+    expect(result).toContain("A Tavily search result");
+  });
+
+  it("returns no-results message for empty Tavily response", async () => {
+    const mockResponse = {
+      ok: true,
+      json: vi.fn().mockResolvedValue({}),
+    };
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      mockResponse,
+    );
+
+    const tools = createSearchTools([{
+      provider: "tavily",
+      apiKeyEnvVar: "TAVILY_API_KEY",
+    }]);
+    const result = await tools[0].execute({ query: "nothing" });
+    expect(result).toContain("No results found");
+  });
+
+  it("throws on Tavily API error", async () => {
+    const mockResponse = {
+      ok: false,
+      status: 429,
+      statusText: "Too Many Requests",
+    };
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      mockResponse,
+    );
+
+    const tools = createSearchTools([{
+      provider: "tavily",
+      apiKeyEnvVar: "TAVILY_API_KEY",
+    }]);
+    await expect(tools[0].execute({ query: "test" })).rejects.toThrow(
+      "Tavily Search API HTTP 429",
+    );
+  });
+});
+
+describe("web_search fallback chain", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("falls back to next provider when first fails", async () => {
+    let callCount = 0;
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation(
+      (url: string) => {
+        callCount++;
+        if (url.includes("googleapis.com")) {
+          return Promise.resolve({
+            ok: false,
+            status: 429,
+            statusText: "Too Many Requests",
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              web: {
+                results: [
+                  {
+                    title: "Brave Fallback",
+                    url: "https://brave-fallback.com",
+                    description: "Result from Brave fallback",
+                  },
+                ],
+              },
+            }),
+        });
+      },
+    );
+
+    const tools = createSearchTools([
+      { provider: "google", apiKeyEnvVar: "GOOGLE_KEY", searchEngineId: "cse-id" },
+      { provider: "brave", apiKeyEnvVar: "BRAVE_KEY" },
+    ]);
+    const result = await tools[0].execute({ query: "test" });
+
+    expect(callCount).toBe(2);
+    expect(result).toContain("Brave Fallback");
+  });
+
+  it("throws last error when all providers fail", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation(
+      (url: string) => {
+        if (url.includes("googleapis.com")) {
+          return Promise.resolve({
+            ok: false,
+            status: 429,
+            statusText: "Too Many Requests",
+          });
+        }
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          statusText: "Internal Server Error",
+        });
+      },
+    );
+
+    const tools = createSearchTools([
+      { provider: "google", apiKeyEnvVar: "GOOGLE_KEY", searchEngineId: "cse-id" },
+      { provider: "brave", apiKeyEnvVar: "BRAVE_KEY" },
+    ]);
+
+    await expect(tools[0].execute({ query: "test" })).rejects.toThrow(
+      "Brave Search API HTTP 500",
+    );
+  });
+
+  it("does not try second provider when first succeeds", async () => {
+    let callCount = 0;
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      callCount++;
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            web: {
+              results: [
+                {
+                  title: "First Provider",
+                  url: "https://first.com",
+                  description: "Result from first",
+                },
+              ],
+            },
+          }),
+      });
+    });
+
+    const tools = createSearchTools([
+      { provider: "brave", apiKeyEnvVar: "BRAVE_KEY" },
+      { provider: "brave", apiKeyEnvVar: "BRAVE_KEY_2" },
+    ]);
+    const result = await tools[0].execute({ query: "test" });
+
+    expect(callCount).toBe(1);
+    expect(result).toContain("First Provider");
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AssistantConfigSchema, GatewayAuthSchema } from "./schema.js";
+import { AssistantConfigSchema, GatewayAuthSchema, WebSearchConfigSchema } from "./schema.js";
 
 describe("GatewayAuthSchema", () => {
   it("accepts valid token auth", () => {
@@ -60,6 +60,43 @@ describe("GatewayAuthSchema", () => {
       mode: "oauth",
       token: "a".repeat(32),
     });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("WebSearchConfigSchema", () => {
+  it("accepts an array with one provider", () => {
+    const result = WebSearchConfigSchema.safeParse([
+      { provider: "brave", apiKeyEnvVar: "BRAVE_API_KEY" },
+    ]);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts an array with multiple providers (fallback chain)", () => {
+    const result = WebSearchConfigSchema.safeParse([
+      { provider: "google", apiKeyEnvVar: "GOOGLE_KEY", searchEngineId: "cse-id" },
+      { provider: "brave", apiKeyEnvVar: "BRAVE_KEY" },
+    ]);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an empty array", () => {
+    const result = WebSearchConfigSchema.safeParse([]);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a single object (must be an array)", () => {
+    const result = WebSearchConfigSchema.safeParse({
+      provider: "brave",
+      apiKeyEnvVar: "BRAVE_API_KEY",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an entry with an unknown provider", () => {
+    const result = WebSearchConfigSchema.safeParse([
+      { provider: "bing", apiKeyEnvVar: "BING_KEY" },
+    ]);
     expect(result.success).toBe(false);
   });
 });

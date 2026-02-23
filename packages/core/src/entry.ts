@@ -121,6 +121,15 @@ program
           log.warn("TELEGRAM_BOT_TOKEN set but @haya/telegram not installed");
         }
       }
+      if (process.env.KAKAO_SKILL_PORT) {
+        try {
+          const kakao = await import("@haya/kakao" as string);
+          channelRegistry.register(kakao.createKakaoChannel());
+          log.info("KakaoTalk channel detected via KAKAO_SKILL_PORT");
+        } catch {
+          log.warn("KAKAO_SKILL_PORT set but @haya/kakao not installed");
+        }
+      }
 
       // Initialize tool policy engine
       const toolPolicies = config.agent.toolPolicies ?? [];

@@ -49,6 +49,7 @@ export type {
 // Infrastructure
 export { createLogger, redactSensitive } from "./infra/logger.js";
 export type { LogLevel } from "./infra/logger.js";
+export { markdownToMrkdwn } from "./infra/markdown-to-mrkdwn.js";
 export {
   AppError,
   ConfigError,
