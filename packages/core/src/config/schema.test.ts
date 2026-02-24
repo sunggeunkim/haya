@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AssistantConfigSchema, GatewayAuthSchema, ToolsConfigSchema, WebSearchConfigSchema } from "./schema.js";
+import { AssistantConfigSchema, FinanceConfigSchema, GatewayAuthSchema, ToolsConfigSchema, WebSearchConfigSchema } from "./schema.js";
 
 describe("GatewayAuthSchema", () => {
   it("accepts valid token auth", () => {
@@ -119,6 +119,81 @@ describe("ToolsConfigSchema", () => {
   it("accepts config without twitterSearch (optional)", () => {
     const result = ToolsConfigSchema.safeParse({});
     expect(result.success).toBe(true);
+  });
+
+  it("accepts stockQuote with valid providers", () => {
+    const result = ToolsConfigSchema.safeParse({
+      stockQuote: [
+        { provider: "yahoo", apiKeyEnvVar: "RAPIDAPI_KEY" },
+        { provider: "alphavantage", apiKeyEnvVar: "AV_KEY" },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects stockQuote with empty array", () => {
+    const result = ToolsConfigSchema.safeParse({
+      stockQuote: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects stockQuote with unknown provider", () => {
+    const result = ToolsConfigSchema.safeParse({
+      stockQuote: [{ provider: "unknown", apiKeyEnvVar: "KEY" }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts config without stockQuote (optional)", () => {
+    const result = ToolsConfigSchema.safeParse({});
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("FinanceConfigSchema", () => {
+  it("accepts an array with one provider", () => {
+    const result = FinanceConfigSchema.safeParse([
+      { provider: "yahoo", apiKeyEnvVar: "RAPIDAPI_KEY" },
+    ]);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts yfinance provider without apiKeyEnvVar", () => {
+    const result = FinanceConfigSchema.safeParse([
+      { provider: "yfinance" },
+    ]);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts an array with multiple providers (fallback chain)", () => {
+    const result = FinanceConfigSchema.safeParse([
+      { provider: "yfinance" },
+      { provider: "yahoo", apiKeyEnvVar: "RAPIDAPI_KEY" },
+      { provider: "alphavantage", apiKeyEnvVar: "AV_KEY" },
+      { provider: "twelvedata", apiKeyEnvVar: "TD_KEY" },
+    ]);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an empty array", () => {
+    const result = FinanceConfigSchema.safeParse([]);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a single object (must be an array)", () => {
+    const result = FinanceConfigSchema.safeParse({
+      provider: "yahoo",
+      apiKeyEnvVar: "RAPIDAPI_KEY",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an entry with an unknown provider", () => {
+    const result = FinanceConfigSchema.safeParse([
+      { provider: "bloomberg", apiKeyEnvVar: "BB_KEY" },
+    ]);
+    expect(result.success).toBe(false);
   });
 });
 

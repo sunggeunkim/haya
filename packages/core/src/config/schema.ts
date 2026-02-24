@@ -91,12 +91,25 @@ export const TwitterSearchConfigSchema = z.object({
   apiKeyEnvVar: z.string(),
 });
 
+export const FinanceProviderSchema = z.object({
+  provider: z.enum(["yahoo", "alphavantage", "twelvedata", "yfinance"]),
+  apiKeyEnvVar: z.string().optional(),
+});
+
+export const FinanceConfigSchema = z.array(FinanceProviderSchema).min(1);
+
+export const TodoistConfigSchema = z.object({
+  apiKeyEnvVar: z.string(),
+});
+
 export const ToolsConfigSchema = z.object({
   googleMapsApiKeyEnvVar: z.string().optional(),
   google: GoogleConfigSchema.optional(),
   webSearch: WebSearchConfigSchema.optional(),
   twitterSearch: TwitterSearchConfigSchema.optional(),
   imageGeneration: ImageGenerationConfigSchema.optional(),
+  stockQuote: FinanceConfigSchema.optional(),
+  todoist: TodoistConfigSchema.optional(),
 });
 
 export const ProviderEntrySchema = z.object({
@@ -154,7 +167,7 @@ export const AssistantConfigSchema = z.object({
     systemPrompt: z
       .string()
       .default(
-        "You are a helpful assistant responding to users in a chat conversation. Reply directly and concisely.",
+        "You are a friendly personal assistant. Keep replies short — 1-3 sentences. Use a warm, casual tone. When something is ambiguous, make your best guess and go with it rather than asking clarifying questions. If a topic is complex, break it into a back-and-forth dialogue rather than a single long answer.",
       ),
     systemPromptFiles: z.array(z.string()).optional(),
     maxHistoryMessages: z.number().int().min(0).default(100),

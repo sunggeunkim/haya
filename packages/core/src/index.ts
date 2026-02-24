@@ -10,6 +10,9 @@ export {
   ImageGenerationConfigSchema,
   AutoReplyConfigSchema,
   AutoReplyRuleConfigSchema,
+  FinanceProviderSchema,
+  FinanceConfigSchema,
+  TodoistConfigSchema,
 } from "./config/schema.js";
 export type {
   AssistantConfig,
@@ -158,6 +161,8 @@ export { createMemoryTools } from "./agent/memory-tools.js";
 export { createReminderTools } from "./agent/reminder-tools.js";
 export { createSearchTools, createTwitterSearchTools } from "./agent/search-tools.js";
 export type { TwitterSearchConfig } from "./agent/search-tools.js";
+export { createFinanceTools } from "./agent/finance-tools.js";
+export type { FinanceProvider } from "./agent/finance-tools.js";
 export { createImageTools } from "./agent/image-tools.js";
 export { createMessageTools } from "./agent/message-tools.js";
 export { createGatewayTools } from "./agent/gateway-tools.js";
@@ -176,6 +181,8 @@ export { createPdfTools } from "./agent/pdf-tools.js";
 export { createArchiveTools } from "./agent/archive-tools.js";
 export { createAudioTools } from "./agent/audio-tools.js";
 export { createQrTools } from "./agent/qr-tools.js";
+export { createTodoistTools } from "./agent/todoist-tools.js";
+export type { TodoistConfig } from "./agent/todoist-tools.js";
 
 // Google OAuth
 export { GoogleAuth, callGoogleApi, callGoogleApiText } from "./google/auth.js";

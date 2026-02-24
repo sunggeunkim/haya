@@ -30,7 +30,7 @@ const validConfig: AssistantConfig = {
     defaultModel: "gpt-4o",
     defaultProviderApiKeyEnvVar: "OPENAI_API_KEY",
     systemPrompt:
-      "You are a helpful assistant responding to users in a chat conversation. Reply directly and concisely.",
+      "You are a friendly personal assistant. Keep replies short — 1-3 sentences. Use a warm, casual tone. When something is ambiguous, make your best guess and go with it rather than asking clarifying questions. If a topic is complex, break it into a back-and-forth dialogue rather than a single long answer.",
     maxHistoryMessages: 100,
     toolPolicies: [],
   },
@@ -139,7 +139,7 @@ describe("JSON5 config support", () => {
   agent: {
     defaultModel: "gpt-4o",
     defaultProviderApiKeyEnvVar: "OPENAI_API_KEY",
-    systemPrompt: "You are a helpful assistant responding to users in a chat conversation. Reply directly and concisely.",
+    systemPrompt: "You are a friendly personal assistant. Keep replies short — 1-3 sentences. Use a warm, casual tone. When something is ambiguous, make your best guess and go with it rather than asking clarifying questions. If a topic is complex, break it into a back-and-forth dialogue rather than a single long answer.",
     maxHistoryMessages: 100,
     toolPolicies: [],
   },

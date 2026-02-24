@@ -78,7 +78,7 @@ Configuration for the AI agent and model provider.
 | `agent.defaultModel` | `string` | `"gpt-4o"` | The default model to use for chat completions. |
 | `agent.defaultProviderApiKeyEnvVar` | `string` | *(optional)* | Name of the environment variable containing the API key for the default provider (e.g., `"OPENAI_API_KEY"`). Required for all providers except `"bedrock"`. |
 | `agent.awsRegion` | `string` | *(optional)* | AWS region for Amazon Bedrock. Required when `defaultProvider` is `"bedrock"` and neither `AWS_REGION` nor `AWS_DEFAULT_REGION` environment variables are set. Example: `"us-east-1"`. |
-| `agent.systemPrompt` | `string` | `"You are a helpful assistant responding to users in a chat conversation. Reply directly and concisely."` | The system prompt sent to the AI model at the beginning of every conversation. |
+| `agent.systemPrompt` | `string` | `"You are a friendly personal assistant. Keep replies short — 1-3 sentences. Use a warm, casual tone. When something is ambiguous, make your best guess and go with it rather than asking clarifying questions. If a topic is complex, break it into a back-and-forth dialogue rather than a single long answer."` | The system prompt sent to the AI model at the beginning of every conversation. |
 | `agent.systemPromptFiles` | `string[]` | *(optional)* | Array of file paths whose contents are appended to the system prompt. Useful for loading long or reusable prompt fragments from separate files. |
 | `agent.maxHistoryMessages` | `number` (integer, >= 0) | `100` | Maximum number of conversation messages retained in session history. Older messages are dropped when this limit is exceeded. |
 | `agent.workspace` | `string` | *(optional)* | Path to a workspace directory. When set, file-based tools operate relative to this directory. |
@@ -255,7 +255,7 @@ The minimal configuration created by `haya init`:
   "agent": {
     "defaultModel": "gpt-4o",
     "defaultProviderApiKeyEnvVar": "OPENAI_API_KEY",
-    "systemPrompt": "You are a helpful assistant responding to users in a chat conversation. Reply directly and concisely.",
+    "systemPrompt": "You are a friendly personal assistant. Keep replies short — 1-3 sentences. Use a warm, casual tone. When something is ambiguous, make your best guess and go with it rather than asking clarifying questions. If a topic is complex, break it into a back-and-forth dialogue rather than a single long answer.",
     "maxHistoryMessages": 100,
     "toolPolicies": []
   },

@@ -211,6 +211,24 @@ program
         log.info("Twitter search tools registered");
       }
 
+      // Register stock quote tools
+      if (config.tools?.stockQuote) {
+        const { createFinanceTools } = await import("./agent/finance-tools.js");
+        for (const tool of createFinanceTools(config.tools.stockQuote)) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Stock quote tools registered");
+      }
+
+      // Register Todoist tools
+      if (config.tools?.todoist) {
+        const { createTodoistTools } = await import("./agent/todoist-tools.js");
+        for (const tool of createTodoistTools(config.tools.todoist)) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Todoist tools registered");
+      }
+
       // Register image generation tools
       if (config.tools?.imageGeneration) {
         const { createImageTools } = await import("./agent/image-tools.js");

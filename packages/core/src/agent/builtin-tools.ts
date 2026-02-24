@@ -489,6 +489,10 @@ export const defaultToolPolicies = [
   { toolName: "audio_transcribe", level: "confirm" as PolicyLevel },
   { toolName: "qr_generate", level: "allow" as PolicyLevel },
   { toolName: "qr_decode", level: "allow" as PolicyLevel },
+  { toolName: "todoist_tasks", level: "confirm" as PolicyLevel },
+  { toolName: "todoist_projects", level: "confirm" as PolicyLevel },
+  { toolName: "todoist_task_search", level: "allow" as PolicyLevel },
+  { toolName: "todoist_labels", level: "allow" as PolicyLevel },
 ];
 
 /** All built-in tools (excludes session tools which need runtime config). */
@@ -523,3 +527,4 @@ export { createPdfTools } from "./pdf-tools.js";
 export { createArchiveTools } from "./archive-tools.js";
 export { createAudioTools } from "./audio-tools.js";
 export { createQrTools } from "./qr-tools.js";
+export { createTodoistTools } from "./todoist-tools.js";
