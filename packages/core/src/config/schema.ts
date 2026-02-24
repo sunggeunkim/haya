@@ -87,10 +87,15 @@ export const AutoReplyConfigSchema = z.object({
   rules: z.array(AutoReplyRuleConfigSchema).default([]),
 });
 
+export const TwitterSearchConfigSchema = z.object({
+  apiKeyEnvVar: z.string(),
+});
+
 export const ToolsConfigSchema = z.object({
   googleMapsApiKeyEnvVar: z.string().optional(),
   google: GoogleConfigSchema.optional(),
   webSearch: WebSearchConfigSchema.optional(),
+  twitterSearch: TwitterSearchConfigSchema.optional(),
   imageGeneration: ImageGenerationConfigSchema.optional(),
 });
 

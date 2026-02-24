@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AssistantConfigSchema, GatewayAuthSchema, WebSearchConfigSchema } from "./schema.js";
+import { AssistantConfigSchema, GatewayAuthSchema, ToolsConfigSchema, WebSearchConfigSchema } from "./schema.js";
 
 describe("GatewayAuthSchema", () => {
   it("accepts valid token auth", () => {
@@ -98,6 +98,27 @@ describe("WebSearchConfigSchema", () => {
       { provider: "bing", apiKeyEnvVar: "BING_KEY" },
     ]);
     expect(result.success).toBe(false);
+  });
+});
+
+describe("ToolsConfigSchema", () => {
+  it("accepts twitterSearch with apiKeyEnvVar", () => {
+    const result = ToolsConfigSchema.safeParse({
+      twitterSearch: { apiKeyEnvVar: "TWITTER_BEARER_TOKEN" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects twitterSearch without apiKeyEnvVar", () => {
+    const result = ToolsConfigSchema.safeParse({
+      twitterSearch: {},
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts config without twitterSearch (optional)", () => {
+    const result = ToolsConfigSchema.safeParse({});
+    expect(result.success).toBe(true);
   });
 });
 

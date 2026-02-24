@@ -202,6 +202,15 @@ program
         log.info("Web search tools registered");
       }
 
+      // Register Twitter search tools
+      if (config.tools?.twitterSearch) {
+        const { createTwitterSearchTools } = await import("./agent/search-tools.js");
+        for (const tool of createTwitterSearchTools(config.tools.twitterSearch)) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Twitter search tools registered");
+      }
+
       // Register image generation tools
       if (config.tools?.imageGeneration) {
         const { createImageTools } = await import("./agent/image-tools.js");
