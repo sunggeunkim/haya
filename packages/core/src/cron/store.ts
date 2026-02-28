@@ -68,7 +68,7 @@ export class CronStore {
         schedule: configJob.schedule,
         action: configJob.action,
         enabled: configJob.enabled,
-        metadata: existing?.metadata,
+        metadata: { ...existing?.metadata, ...configJob.metadata },
         lastRunAt: existing?.lastRunAt,
         lastStatus: existing?.lastStatus,
         lastError: existing?.lastError,

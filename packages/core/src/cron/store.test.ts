@@ -285,6 +285,34 @@ describe("CronStore", () => {
     expect(savedJob.action).toBe("persist-task");
   });
 
+  it("merges config metadata with stored metadata (config wins)", async () => {
+    const store = new CronStore(storePath);
+    const jobsWithMeta: CronJob[] = [
+      {
+        name: "agent-job",
+        schedule: "0 7 * * *",
+        action: "agent_prompt",
+        enabled: true,
+        metadata: { prompt: "Hello", model: "gpt-4o" },
+      },
+    ];
+    await store.load(jobsWithMeta);
+
+    // Simulate stored runtime metadata
+    const job = store.getByName("agent-job")!;
+    job.metadata = { ...job.metadata, runtimeKey: "stored-value", model: "old-model" };
+    await store.save();
+
+    // Reload: config metadata should win for shared keys, stored keys preserved
+    const store2 = new CronStore(storePath);
+    await store2.load(jobsWithMeta);
+    const reloaded = store2.getByName("agent-job")!;
+
+    expect(reloaded.metadata?.prompt).toBe("Hello");
+    expect(reloaded.metadata?.model).toBe("gpt-4o"); // config wins
+    expect(reloaded.metadata?.runtimeKey).toBe("stored-value"); // stored key preserved
+  });
+
   it("load() with empty configJobs starts fresh even if store file exists", async () => {
     const store = new CronStore(storePath);
     await store.load(testJobs);
