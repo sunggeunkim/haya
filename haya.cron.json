@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "jobs": [
+    {
+      "id": "4276c296-6d86-4f21-9197-7fa017683aff",
+      "name": "morning-briefing",
+      "schedule": "0 7 * * *",
+      "action": "agent_prompt",
+      "enabled": true,
+      "metadata": {
+        "prompt": "Give me a morning briefing: today's weather for San Jose, CA, top news headlines, stock market update, my Todoist tasks due today, and a summary of my recent unread emails."
+      },
+      "lastRunAt": 1772204434610,
+      "lastStatus": "ok",
+      "createdAt": 1771916726704,
+      "updatedAt": 1772204434610
+    }
+  ]
+}
