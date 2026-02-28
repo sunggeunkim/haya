@@ -33,6 +33,7 @@ const validConfig: AssistantConfig = {
       "You are a friendly personal assistant. Keep replies short — 1-3 sentences. Use a warm, casual tone. When something is ambiguous, make your best guess and go with it rather than asking clarifying questions. If a topic is complex, break it into a back-and-forth dialogue rather than a single long answer.",
     maxHistoryMessages: 100,
     toolPolicies: [],
+    specialists: [],
   },
   cron: [],
   plugins: [],

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AssistantConfigSchema, FinanceConfigSchema, GatewayAuthSchema, ToolsConfigSchema, WebSearchConfigSchema } from "./schema.js";
+import { AssistantConfigSchema, CronJobSchema, FinanceConfigSchema, FlightConfigSchema, GatewayAuthSchema, LoggingSchema, ToolsConfigSchema, WebSearchConfigSchema } from "./schema.js";
 
 describe("GatewayAuthSchema", () => {
   it("accepts valid token auth", () => {
@@ -149,6 +149,55 @@ describe("ToolsConfigSchema", () => {
     const result = ToolsConfigSchema.safeParse({});
     expect(result.success).toBe(true);
   });
+
+  it("accepts flightSearch with valid providers", () => {
+    const result = ToolsConfigSchema.safeParse({
+      flightSearch: [
+        { provider: "serpapi", apiKeyEnvVar: "SERPAPI_KEY" },
+        { provider: "amadeus", apiKeyEnvVar: "AMADEUS_ID", apiSecretEnvVar: "AMADEUS_SECRET", environment: "test" },
+        { provider: "tequila", apiKeyEnvVar: "TEQUILA_KEY" },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects flightSearch with empty array", () => {
+    const result = ToolsConfigSchema.safeParse({
+      flightSearch: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects flightSearch with unknown provider", () => {
+    const result = ToolsConfigSchema.safeParse({
+      flightSearch: [{ provider: "kayak", apiKeyEnvVar: "KEY" }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts config without flightSearch (optional)", () => {
+    const result = ToolsConfigSchema.safeParse({});
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts youtube with apiKeyEnvVar", () => {
+    const result = ToolsConfigSchema.safeParse({
+      youtube: { apiKeyEnvVar: "YOUTUBE_API_KEY" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects youtube without apiKeyEnvVar", () => {
+    const result = ToolsConfigSchema.safeParse({
+      youtube: {},
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts config without youtube (optional)", () => {
+    const result = ToolsConfigSchema.safeParse({});
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("FinanceConfigSchema", () => {
@@ -194,6 +243,104 @@ describe("FinanceConfigSchema", () => {
       { provider: "bloomberg", apiKeyEnvVar: "BB_KEY" },
     ]);
     expect(result.success).toBe(false);
+  });
+});
+
+describe("FlightConfigSchema", () => {
+  it("accepts an array with one provider", () => {
+    const result = FlightConfigSchema.safeParse([
+      { provider: "serpapi", apiKeyEnvVar: "SERPAPI_KEY" },
+    ]);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts an array with multiple providers (fallback chain)", () => {
+    const result = FlightConfigSchema.safeParse([
+      { provider: "serpapi", apiKeyEnvVar: "SERPAPI_KEY" },
+      { provider: "amadeus", apiKeyEnvVar: "AMADEUS_ID", apiSecretEnvVar: "AMADEUS_SECRET" },
+      { provider: "tequila", apiKeyEnvVar: "TEQUILA_KEY" },
+    ]);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts amadeus with environment option", () => {
+    const result = FlightConfigSchema.safeParse([
+      { provider: "amadeus", apiKeyEnvVar: "ID", apiSecretEnvVar: "SECRET", environment: "production" },
+    ]);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data[0].environment).toBe("production");
+    }
+  });
+
+  it("rejects an empty array", () => {
+    const result = FlightConfigSchema.safeParse([]);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a single object (must be an array)", () => {
+    const result = FlightConfigSchema.safeParse({
+      provider: "serpapi",
+      apiKeyEnvVar: "KEY",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an entry with an unknown provider", () => {
+    const result = FlightConfigSchema.safeParse([
+      { provider: "kayak", apiKeyEnvVar: "KEY" },
+    ]);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an entry without apiKeyEnvVar", () => {
+    const result = FlightConfigSchema.safeParse([
+      { provider: "serpapi" },
+    ]);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects invalid environment value", () => {
+    const result = FlightConfigSchema.safeParse([
+      { provider: "amadeus", apiKeyEnvVar: "ID", environment: "staging" },
+    ]);
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("CronJobSchema", () => {
+  it("accepts a cron job without metadata", () => {
+    const result = CronJobSchema.safeParse({
+      name: "test-job",
+      schedule: "0 * * * *",
+      action: "prune_sessions",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.metadata).toBeUndefined();
+    }
+  });
+
+  it("accepts a cron job with metadata", () => {
+    const result = CronJobSchema.safeParse({
+      name: "briefing",
+      schedule: "0 7 * * *",
+      action: "agent_prompt",
+      metadata: { prompt: "Good morning!", model: "gpt-4o" },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.metadata).toEqual({ prompt: "Good morning!", model: "gpt-4o" });
+    }
+  });
+
+  it("defaults enabled to true", () => {
+    const result = CronJobSchema.parse({
+      name: "test",
+      schedule: "0 * * * *",
+      action: "test",
+    });
+    expect(result.enabled).toBe(true);
   });
 });
 
@@ -310,5 +457,47 @@ describe("AssistantConfigSchema", () => {
   it("awsRegion defaults to undefined when not specified", () => {
     const result = AssistantConfigSchema.parse(validConfig);
     expect(result.agent.awsRegion).toBeUndefined();
+  });
+});
+
+describe("LoggingSchema", () => {
+  it("applies correct defaults for new logging fields", () => {
+    const result = LoggingSchema.parse({});
+    expect(result.dir).toBe("data/logs");
+    expect(result.maxSizeMB).toBe(10);
+    expect(result.maxFiles).toBe(5);
+  });
+
+  it("rejects maxSizeMB less than 1", () => {
+    const result = LoggingSchema.safeParse({ maxSizeMB: 0 });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects maxFiles less than 1", () => {
+    const result = LoggingSchema.safeParse({ maxFiles: 0 });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects maxFiles greater than 100", () => {
+    const result = LoggingSchema.safeParse({ maxFiles: 101 });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-integer maxFiles", () => {
+    const result = LoggingSchema.safeParse({ maxFiles: 3.5 });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts custom values for all logging fields", () => {
+    const result = LoggingSchema.parse({
+      level: "debug",
+      redactSecrets: false,
+      dir: "/var/log/haya",
+      maxSizeMB: 50,
+      maxFiles: 20,
+    });
+    expect(result.dir).toBe("/var/log/haya");
+    expect(result.maxSizeMB).toBe(50);
+    expect(result.maxFiles).toBe(20);
   });
 });

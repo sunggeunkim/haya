@@ -46,6 +46,15 @@ export function validateConfig(config: AssistantConfig): void {
     }
   }
 
+  // Cron job validation
+  for (const cronJob of config.cron) {
+    if (cronJob.action === "agent_prompt") {
+      if (!cronJob.metadata?.prompt || typeof cronJob.metadata.prompt !== "string") {
+        errors.push(`cron job "${cronJob.name}": agent_prompt requires metadata.prompt`);
+      }
+    }
+  }
+
   // Provider-specific validation
   const provider = (config.agent as Record<string, unknown>).defaultProvider as string | undefined ?? "openai";
 

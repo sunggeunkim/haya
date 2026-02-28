@@ -34,6 +34,7 @@ export const CronJobSchema = z.object({
   schedule: z.string(),
   action: z.string(),
   enabled: z.boolean().default(true),
+  metadata: z.record(z.unknown()).optional(),
 });
 
 export const LoggingSchema = z.object({
@@ -41,6 +42,9 @@ export const LoggingSchema = z.object({
     .enum(["silly", "trace", "debug", "info", "warn", "error", "fatal"])
     .default("info"),
   redactSecrets: z.boolean().default(true),
+  dir: z.string().default("data/logs"),
+  maxSizeMB: z.number().min(1).default(10),
+  maxFiles: z.number().int().min(1).max(100).default(5),
 });
 
 export const GoogleConfigSchema = z.object({
@@ -98,7 +102,20 @@ export const FinanceProviderSchema = z.object({
 
 export const FinanceConfigSchema = z.array(FinanceProviderSchema).min(1);
 
+export const FlightProviderSchema = z.object({
+  provider: z.enum(["serpapi", "amadeus", "tequila"]),
+  apiKeyEnvVar: z.string(),
+  apiSecretEnvVar: z.string().optional(),
+  environment: z.enum(["test", "production"]).optional(),
+});
+
+export const FlightConfigSchema = z.array(FlightProviderSchema).min(1);
+
 export const TodoistConfigSchema = z.object({
+  apiKeyEnvVar: z.string(),
+});
+
+export const YouTubeConfigSchema = z.object({
   apiKeyEnvVar: z.string(),
 });
 
@@ -109,7 +126,9 @@ export const ToolsConfigSchema = z.object({
   twitterSearch: TwitterSearchConfigSchema.optional(),
   imageGeneration: ImageGenerationConfigSchema.optional(),
   stockQuote: FinanceConfigSchema.optional(),
+  flightSearch: FlightConfigSchema.optional(),
   todoist: TodoistConfigSchema.optional(),
+  youtube: YouTubeConfigSchema.optional(),
 });
 
 export const ProviderEntrySchema = z.object({
@@ -122,6 +141,14 @@ export const ProviderEntrySchema = z.object({
 export const ToolPolicySchema = z.object({
   toolName: z.string(),
   level: z.enum(["allow", "confirm", "deny"]),
+});
+
+export const SpecialistSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  systemPrompt: z.string(),
+  model: z.string().optional(),
+  tools: z.array(z.string()).optional(),
 });
 
 export const SenderAuthSchema = z.object({
@@ -174,6 +201,7 @@ export const AssistantConfigSchema = z.object({
     workspace: z.string().optional(),
     providers: z.array(ProviderEntrySchema).optional(),
     toolPolicies: z.array(ToolPolicySchema).default([]),
+    specialists: z.array(SpecialistSchema).default([]),
     maxContextTokens: z.number().int().min(1000).optional(),
   }),
   senderAuth: SenderAuthSchema.optional(),

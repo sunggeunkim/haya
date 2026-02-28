@@ -23,6 +23,7 @@ function createTestConfig(portOverride = 0): AssistantConfig {
       systemPrompt: "You are a test assistant.",
       maxHistoryMessages: 10,
       toolPolicies: [],
+      specialists: [],
     },
     cron: [],
     plugins: [],

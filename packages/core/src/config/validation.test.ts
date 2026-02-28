@@ -11,12 +11,14 @@ function makeConfig(overrides: Record<string, unknown> = {}): AssistantConfig {
       trustedProxies: [],
     },
     agent: {
+      defaultProvider: "openai",
       defaultModel: "gpt-4o",
       defaultProviderApiKeyEnvVar: "OPENAI_API_KEY",
       systemPrompt:
         "You are a friendly personal assistant. Keep replies short — 1-3 sentences. Use a warm, casual tone. When something is ambiguous, make your best guess and go with it rather than asking clarifying questions. If a topic is complex, break it into a back-and-forth dialogue rather than a single long answer.",
       maxHistoryMessages: 100,
       toolPolicies: [],
+      specialists: [],
     },
     cron: [],
     plugins: [],
@@ -212,6 +214,35 @@ describe("validateConfig — provider-specific validation", () => {
     });
     expect(() => validateConfig(config)).toThrow(ConfigValidationError);
     expect(() => validateConfig(config)).toThrow(/defaultProviderApiKeyEnvVar/);
+  });
+
+  it("errors when agent_prompt cron job is missing metadata.prompt", () => {
+    const config = makeConfig({
+      cron: [
+        { name: "briefing", schedule: "0 7 * * *", action: "agent_prompt", enabled: true },
+      ],
+    });
+    expect(() => validateConfig(config)).toThrow(ConfigValidationError);
+    expect(() => validateConfig(config)).toThrow(/agent_prompt requires metadata\.prompt/);
+  });
+
+  it("errors when agent_prompt cron job has non-string metadata.prompt", () => {
+    const config = makeConfig({
+      cron: [
+        { name: "briefing", schedule: "0 7 * * *", action: "agent_prompt", enabled: true, metadata: { prompt: 123 } },
+      ],
+    });
+    expect(() => validateConfig(config)).toThrow(ConfigValidationError);
+    expect(() => validateConfig(config)).toThrow(/agent_prompt requires metadata\.prompt/);
+  });
+
+  it("passes when agent_prompt cron job has valid metadata.prompt", () => {
+    const config = makeConfig({
+      cron: [
+        { name: "briefing", schedule: "0 7 * * *", action: "agent_prompt", enabled: true, metadata: { prompt: "Good morning!" } },
+      ],
+    });
+    expect(() => validateConfig(config)).not.toThrow();
   });
 
   it("errors when provider defaults to openai and apiKeyEnvVar is missing", () => {

@@ -14,15 +14,17 @@ function makeTestConfig(overrides?: Partial<AssistantConfig>): AssistantConfig {
       trustedProxies: [],
     },
     agent: {
+      defaultProvider: "openai",
       defaultModel: "gpt-4o",
       defaultProviderApiKeyEnvVar: "TEST_KEY",
       systemPrompt: "You are a test assistant.",
       maxHistoryMessages: 100,
       toolPolicies: [],
+      specialists: [],
     },
     cron: [],
     plugins: [],
-    logging: { level: "error", redactSecrets: true },
+    logging: { level: "error", redactSecrets: true, dir: "data/logs", maxSizeMB: 10, maxFiles: 5 },
     ...overrides,
   };
 }
