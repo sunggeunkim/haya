@@ -61,7 +61,6 @@ Channel (Slack/Discord/etc) → ChannelDock → MessageRouter → AgentRuntime �
   - `tool-policy.ts` — `ToolPolicyEngine` (allow/confirm/deny per tool)
   - `types.ts` — shared types: `Message`, `ProviderConfig`, `AIProvider`, `AgentTool`, etc.
   - `retry.ts` — `withRetry()` with exponential backoff, `RetryableProviderError`
-  - `delegation.ts` — `createDelegationTools()`: multi-agent delegation via `delegate_task` tool. Spins up specialist `AgentRuntime` instances with filtered tool subsets. Specialists don't get `delegate_task` (no recursion).
 
 - **`config/`** — Configuration loading and validation
   - `schema.ts` — Zod schemas (`AssistantConfigSchema`)
@@ -163,7 +162,7 @@ Channel (Slack/Discord/etc) → ChannelDock → MessageRouter → AgentRuntime �
 
 The main config is `haya.json` at project root. Key sections:
 - `gateway` — port, bind mode (loopback/lan/custom), auth (token/password), TLS, trustedProxies
-- `agent` — defaultProvider, defaultModel, defaultProviderApiKeyEnvVar, awsRegion, systemPrompt, toolPolicies, specialists, maxHistoryMessages
+- `agent` — defaultProvider, defaultModel, defaultProviderApiKeyEnvVar, awsRegion, systemPrompt, toolPolicies, maxHistoryMessages
 - `cron` — scheduled jobs
 - `plugins` — plugin definitions
 - `tools` — Google Maps, Google OAuth (Calendar/Gmail/Drive), webSearch (provider: `"brave"` | `"google"`, apiKeyEnvVar, searchEngineId for Google CSE)
