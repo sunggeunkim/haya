@@ -12,6 +12,8 @@ export {
   AutoReplyRuleConfigSchema,
   FinanceProviderSchema,
   FinanceConfigSchema,
+  FlightProviderSchema,
+  FlightConfigSchema,
   TodoistConfigSchema,
 } from "./config/schema.js";
 export type {
@@ -50,6 +52,8 @@ export type {
 } from "./security/sender-auth.js";
 
 // Infrastructure
+export { ActivityLogger, noopActivityLogger } from "./infra/activity-logger.js";
+export type { IActivityLogger, ActivityLoggerConfig, ToolLogRecord, ProviderLogRecord, ActivityLogRecord } from "./infra/activity-logger.js";
 export { createLogger, redactSensitive } from "./infra/logger.js";
 export type { LogLevel } from "./infra/logger.js";
 export { markdownToMrkdwn } from "./infra/markdown-to-mrkdwn.js";
@@ -163,6 +167,8 @@ export { createSearchTools, createTwitterSearchTools } from "./agent/search-tool
 export type { TwitterSearchConfig } from "./agent/search-tools.js";
 export { createFinanceTools } from "./agent/finance-tools.js";
 export type { FinanceProvider } from "./agent/finance-tools.js";
+export { createFlightTools } from "./agent/flight-tools.js";
+export type { FlightProvider } from "./agent/flight-tools.js";
 export { createImageTools } from "./agent/image-tools.js";
 export { createMessageTools } from "./agent/message-tools.js";
 export { createGatewayTools } from "./agent/gateway-tools.js";
@@ -175,6 +181,15 @@ export { createCodeEvalTools } from "./agent/code-eval-tools.js";
 export { createDataTools } from "./agent/data-tools.js";
 export { createHashTools } from "./agent/hash-tools.js";
 export { createWeatherTools } from "./agent/weather-tools.js";
+export { createBibleTools } from "./agent/bible-tools.js";
+export { createBibleSdkTools } from "./agent/biblesdk-tools.js";
+export { createNetBibleTools } from "./agent/netbible-tools.js";
+export { createLectionaryTools } from "./agent/lectionary-tools.js";
+export { createHymnTools } from "./agent/hymn-tools.js";
+export { createBibleTopicTools } from "./agent/bible-topic-tools.js";
+export { createCrossRefTools } from "./agent/cross-ref-tools.js";
+export { createHelloAoTools } from "./agent/helloao-tools.js";
+export { createBibleHubTools } from "./agent/biblehub-tools.js";
 export { createHttpTools } from "./agent/http-tools.js";
 export { createSystemTools } from "./agent/system-tools.js";
 export { createPdfTools } from "./agent/pdf-tools.js";
@@ -183,6 +198,7 @@ export { createAudioTools } from "./agent/audio-tools.js";
 export { createQrTools } from "./agent/qr-tools.js";
 export { createTodoistTools } from "./agent/todoist-tools.js";
 export type { TodoistConfig } from "./agent/todoist-tools.js";
+export { createProfileTools } from "./agent/profile-tools.js";
 
 // Google OAuth
 export { GoogleAuth, callGoogleApi, callGoogleApiText } from "./google/auth.js";
@@ -190,6 +206,7 @@ export type { GoogleAuthConfig } from "./google/auth.js";
 
 // Sessions
 export { SessionStore } from "./sessions/store.js";
+export { SenderProfileStore } from "./sessions/profile-store.js";
 export { HistoryManager } from "./sessions/history.js";
 export { UsageTracker } from "./sessions/usage.js";
 export type { UsageRecord } from "./sessions/usage.js";

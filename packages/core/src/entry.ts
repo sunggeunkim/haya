@@ -163,16 +163,26 @@ program
           ...(config.agent.awsRegion && { awsRegion: config.agent.awsRegion }),
         });
       }
+      // Initialize activity logger
+      const { ActivityLogger } = await import("./infra/activity-logger.js");
+      const activityLogger = new ActivityLogger({
+        dir: config.logging?.dir ?? "data/logs",
+        maxSizeMB: config.logging?.maxSizeMB ?? 10,
+        maxFiles: config.logging?.maxFiles ?? 5,
+        redactSecrets: config.logging?.redactSecrets ?? true,
+      });
+
       const { builtinTools, createSessionTools } = await import(
         "./agent/builtin-tools.js"
       );
       const agentRuntime = new AgentRuntime(provider, {
         defaultModel: config.agent.defaultModel,
         systemPrompt: config.agent.systemPrompt,
-      });
+      }, { activityLogger });
 
       // Set up policy engine on tool registry
       agentRuntime.tools.setPolicyEngine(policyEngine);
+      agentRuntime.tools.setActivityLogger(activityLogger);
 
       // Register built-in tools
       for (const tool of builtinTools) {
@@ -220,6 +230,15 @@ program
         log.info("Stock quote tools registered");
       }
 
+      // Register flight search tools
+      if (config.tools?.flightSearch) {
+        const { createFlightTools } = await import("./agent/flight-tools.js");
+        for (const tool of createFlightTools(config.tools.flightSearch)) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Flight search tools registered");
+      }
+
       // Register Todoist tools
       if (config.tools?.todoist) {
         const { createTodoistTools } = await import("./agent/todoist-tools.js");
@@ -227,6 +246,15 @@ program
           agentRuntime.tools.register(tool);
         }
         log.info("Todoist tools registered");
+      }
+
+      // Register YouTube tools
+      if (config.tools?.youtube) {
+        const { createYouTubeTools } = await import("./agent/youtube-tools.js");
+        for (const tool of createYouTubeTools(config.tools.youtube)) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("YouTube tools registered");
       }
 
       // Register image generation tools
@@ -353,6 +381,87 @@ program
         log.info("Weather tools registered");
       }
 
+      // Register Bible tools (bible-api.com + bolls.life, no API key needed)
+      {
+        const { createBibleTools } = await import("./agent/bible-tools.js");
+        for (const tool of createBibleTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Bible tools registered");
+      }
+
+      // Register Bible SDK tools (biblesdk.com — Strong's concordance + semantic search)
+      {
+        const { createBibleSdkTools } = await import("./agent/biblesdk-tools.js");
+        for (const tool of createBibleSdkTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Bible SDK tools registered");
+      }
+
+      // Register NET Bible tools (labs.bible.org — study notes + random verse)
+      {
+        const { createNetBibleTools } = await import("./agent/netbible-tools.js");
+        for (const tool of createNetBibleTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("NET Bible tools registered");
+      }
+
+      // Register Lectionary tools (lectio-api.org — daily readings + liturgical calendar)
+      {
+        const { createLectionaryTools } = await import("./agent/lectionary-tools.js");
+        for (const tool of createLectionaryTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Lectionary tools registered");
+      }
+
+      // Register Hymnary tools (hymnary.org — find hymns by scripture reference)
+      {
+        const { createHymnTools } = await import("./agent/hymn-tools.js");
+        for (const tool of createHymnTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Hymnary tools registered");
+      }
+
+      // Register Bible-by-topic tools (biblebytopic.com — topical verse lookup)
+      {
+        const { createBibleTopicTools } = await import("./agent/bible-topic-tools.js");
+        for (const tool of createBibleTopicTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Bible topic tools registered");
+      }
+
+      // Register Bible cross-reference tools (OpenBible.info — ~340K cross-references)
+      {
+        const { createCrossRefTools } = await import("./agent/cross-ref-tools.js");
+        for (const tool of createCrossRefTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("Bible cross-reference tools registered");
+      }
+
+      // Register HelloAO Bible tools (bible.helloao.org — 1,000+ translations)
+      {
+        const { createHelloAoTools } = await import("./agent/helloao-tools.js");
+        for (const tool of createHelloAoTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("HelloAO Bible tools registered");
+      }
+
+      // Register BibleHub tools (biblehub.com — commentaries + interlinear)
+      {
+        const { createBibleHubTools } = await import("./agent/biblehub-tools.js");
+        for (const tool of createBibleHubTools()) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info("BibleHub tools registered");
+      }
+
       // Register HTTP request tools
       {
         const { createHttpTools } = await import("./agent/http-tools.js");
@@ -415,6 +524,30 @@ program
           agentRuntime.tools.register(tool);
         }
         log.info("Vision tools registered");
+      }
+
+      // Register per-sender profile tools
+      const { SenderProfileStore } = await import("./sessions/profile-store.js");
+      const { createProfileTools } = await import("./agent/profile-tools.js");
+      const profileStore = new SenderProfileStore("data/profiles");
+      const { tools: profileTools, setSenderId: setProfileSenderId } = createProfileTools(profileStore);
+      for (const tool of profileTools) {
+        agentRuntime.tools.register(tool);
+      }
+      log.info("User profile tools registered");
+
+      // Register delegation tools (multi-agent)
+      if (config.agent.specialists.length > 0) {
+        const { createDelegationTools } = await import("./agent/delegation.js");
+        for (const tool of createDelegationTools({
+          provider,
+          defaultModel: config.agent.defaultModel,
+          sourceTools: agentRuntime.tools,
+          specialists: config.agent.specialists,
+        })) {
+          agentRuntime.tools.register(tool);
+        }
+        log.info(`Delegation tools registered (${config.agent.specialists.length} specialists)`);
       }
 
       const sessionStore = new SessionStore("sessions");
@@ -514,11 +647,28 @@ program
           `${msg.channel}:${msg.channelId}`;
         const sessionKey = rawKey.replace(/:/g, "-");
 
+        const chatStartTime = Date.now();
         log.info(`Processing message from ${msg.senderId} in session ${sessionKey}`);
+
+        // Set sender context for profile tools
+        setProfileSenderId(msg.senderId);
+
+        // Load user profile and inject into system prompt
+        const profile = await profileStore.load(msg.senderId);
+        let systemPromptOverride: string | undefined;
+        if (Object.keys(profile).length > 0) {
+          const profileText = profileStore.formatForPrompt(profile);
+          const basePrompt = config.agent.systemPrompt;
+          systemPromptOverride = `${basePrompt}\n\n${profileText}`;
+        }
 
         const history = historyManager.getHistory(sessionKey);
         const response = await agentRuntime.chat(
-          { sessionId: sessionKey, message: msg.content },
+          {
+            sessionId: sessionKey,
+            message: msg.content,
+            ...(systemPromptOverride && { systemPrompt: systemPromptOverride }),
+          },
           history,
         );
 
@@ -530,6 +680,18 @@ program
             response.usage,
           );
         }
+
+        // Log activity
+        activityLogger.logActivity({
+          sessionId: sessionKey,
+          channel: msg.channel,
+          senderId: msg.senderId,
+          messagePreview: msg.content.substring(0, 100),
+          responsePreview: (response.message.content ?? "").substring(0, 100),
+          totalTokens: response.usage?.totalTokens,
+          toolsUsed: response.toolsUsed ?? [],
+          totalDurationMs: Date.now() - chatStartTime,
+        });
 
         // Persist conversation
         historyManager.addMessages(sessionKey, [
@@ -604,13 +766,95 @@ program
               log.info(`Pruned ${result.deletedCount} sessions (freed ${result.freedBytes} bytes)`);
             }
           }
+        } else if (job.action === "agent_prompt") {
+          const meta = job.metadata ?? {};
+          const prompt = meta.prompt as string;
+          if (!prompt) {
+            log.warn(`agent_prompt job ${job.id} has no prompt — skipping`);
+            return;
+          }
+
+          const sessionKey = `cron-${job.id}`;
+          const cronChatStart = Date.now();
+          const history = historyManager.getHistory(sessionKey);
+
+          // Optional model override
+          const modelOverride = meta.model as string | undefined;
+          const response = await agentRuntime.chat(
+            { sessionId: sessionKey, message: prompt, ...(modelOverride && { model: modelOverride }) },
+            history,
+          );
+
+          // Track usage
+          if (response.usage) {
+            usageTracker.record(
+              sessionKey,
+              modelOverride ?? config.agent.defaultModel,
+              response.usage,
+            );
+          }
+
+          // Log activity
+          activityLogger.logActivity({
+            sessionId: sessionKey,
+            channel: "cron",
+            senderId: "system",
+            messagePreview: prompt.substring(0, 100),
+            responsePreview: (response.message.content ?? "").substring(0, 100),
+            totalTokens: response.usage?.totalTokens,
+            toolsUsed: response.toolsUsed ?? [],
+            totalDurationMs: Date.now() - cronChatStart,
+          });
+
+          // Persist conversation history
+          historyManager.addMessages(sessionKey, [
+            { role: "user", content: prompt, timestamp: Date.now() },
+            response.message,
+          ]);
+
+          // Deliver response to all connected channels
+          if (response.message.content) {
+            for (const ch of channelRegistry.list()) {
+              try {
+                await ch.sendMessage("default", {
+                  content: response.message.content,
+                });
+              } catch {
+                // Channel may not support default destination; skip
+              }
+            }
+          }
+
+          log.info(`agent_prompt job "${job.name}" completed for session ${sessionKey}`);
         } else {
           log.warn(`Unknown cron action: ${job.action}`);
         }
       });
 
+      // Build WebSocket RPC method handlers
+      const methods = new Map<string, import("./gateway/server-ws.js").MethodHandler>();
+      {
+        const { createChatSendHandler } = await import("./gateway/server-methods/chat.js");
+        const { createSessionsListHandler, createSessionsCreateHandler, createSessionsDeleteHandler, createSessionsHistoryHandler } = await import("./gateway/server-methods/sessions.js");
+        const { createChannelsListHandler, createChannelsStartHandler, createChannelsStopHandler } = await import("./gateway/server-methods/channels.js");
+        const { createCronListHandler, createCronStatusHandler, createCronAddHandler, createCronRemoveHandler } = await import("./gateway/server-methods/cron.js");
+
+        methods.set("chat.send", createChatSendHandler(agentRuntime, historyManager));
+        methods.set("sessions.list", createSessionsListHandler(sessionStore));
+        methods.set("sessions.create", createSessionsCreateHandler(sessionStore));
+        methods.set("sessions.delete", createSessionsDeleteHandler(sessionStore));
+        methods.set("sessions.history", createSessionsHistoryHandler(sessionStore));
+        methods.set("channels.list", createChannelsListHandler(channelDock));
+        methods.set("channels.start", createChannelsStartHandler(channelDock));
+        methods.set("channels.stop", createChannelsStopHandler(channelDock));
+        methods.set("cron.list", createCronListHandler(cronService));
+        methods.set("cron.status", createCronStatusHandler(cronService));
+        methods.set("cron.add", createCronAddHandler(cronService));
+        methods.set("cron.remove", createCronRemoveHandler(cronService));
+      }
+
       // Create and start the gateway
-      const gateway = createGateway({ config });
+      const gateway = createGateway({ config, methods });
       await gateway.listen();
 
       // Start cron service

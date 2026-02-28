@@ -493,6 +493,29 @@ export const defaultToolPolicies = [
   { toolName: "todoist_projects", level: "confirm" as PolicyLevel },
   { toolName: "todoist_task_search", level: "allow" as PolicyLevel },
   { toolName: "todoist_labels", level: "allow" as PolicyLevel },
+  { toolName: "delegate_task", level: "allow" as PolicyLevel },
+  { toolName: "youtube_search", level: "allow" as PolicyLevel },
+  { toolName: "youtube_video_details", level: "allow" as PolicyLevel },
+  { toolName: "youtube_captions", level: "allow" as PolicyLevel },
+  { toolName: "user_profile_set", level: "allow" as PolicyLevel },
+  { toolName: "user_profile_get", level: "allow" as PolicyLevel },
+  { toolName: "user_profile_list", level: "allow" as PolicyLevel },
+  { toolName: "user_profile_delete", level: "confirm" as PolicyLevel },
+  { toolName: "biblesdk_verse", level: "allow" as PolicyLevel },
+  { toolName: "biblesdk_search", level: "allow" as PolicyLevel },
+  { toolName: "netbible_lookup", level: "allow" as PolicyLevel },
+  { toolName: "netbible_random", level: "allow" as PolicyLevel },
+  { toolName: "lectionary_today", level: "allow" as PolicyLevel },
+  { toolName: "lectionary_traditions", level: "allow" as PolicyLevel },
+  { toolName: "lectionary_calendar", level: "allow" as PolicyLevel },
+  { toolName: "hymn_by_scripture", level: "allow" as PolicyLevel },
+  { toolName: "bible_topics_list", level: "allow" as PolicyLevel },
+  { toolName: "bible_topic_verses", level: "allow" as PolicyLevel },
+  { toolName: "bible_cross_references", level: "allow" as PolicyLevel },
+  { toolName: "helloao_translations", level: "allow" as PolicyLevel },
+  { toolName: "helloao_chapter", level: "allow" as PolicyLevel },
+  { toolName: "biblehub_commentary", level: "allow" as PolicyLevel },
+  { toolName: "biblehub_interlinear", level: "allow" as PolicyLevel },
 ];
 
 /** All built-in tools (excludes session tools which need runtime config). */
@@ -528,3 +551,14 @@ export { createArchiveTools } from "./archive-tools.js";
 export { createAudioTools } from "./audio-tools.js";
 export { createQrTools } from "./qr-tools.js";
 export { createTodoistTools } from "./todoist-tools.js";
+export { createDelegationTools } from "./delegation.js";
+export { createYouTubeTools } from "./youtube-tools.js";
+export { createProfileTools } from "./profile-tools.js";
+export { createBibleSdkTools } from "./biblesdk-tools.js";
+export { createNetBibleTools } from "./netbible-tools.js";
+export { createLectionaryTools } from "./lectionary-tools.js";
+export { createHymnTools } from "./hymn-tools.js";
+export { createBibleTopicTools } from "./bible-topic-tools.js";
+export { createCrossRefTools } from "./cross-ref-tools.js";
+export { createHelloAoTools } from "./helloao-tools.js";
+export { createBibleHubTools } from "./biblehub-tools.js";

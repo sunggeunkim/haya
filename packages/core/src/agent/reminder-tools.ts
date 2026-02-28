@@ -38,8 +38,11 @@ export function createReminderTools(
     {
       name: "reminder_set",
       description:
-        "Set a reminder for a specific date and time. The reminder message will be " +
-        "delivered to the user at the specified time. Provide the datetime in ISO 8601 format.",
+        "Set a local one-shot reminder that delivers a message via the gateway at " +
+        "a specific date and time. IMPORTANT: Prefer using Google Calendar (google_calendar_create_event) " +
+        "or Todoist (todoist_tasks with action 'create') for reminders when those tools are available — " +
+        "they sync across devices. Only use this tool as a fallback when no calendar or task service is configured. " +
+        "Provide the datetime in ISO 8601 format.",
       defaultPolicy: "confirm",
       parameters: {
         type: "object",
