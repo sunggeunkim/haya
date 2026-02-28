@@ -1,4 +1,6 @@
 import type { Logger } from "tslog";
+import type { IActivityLogger } from "../infra/activity-logger.js";
+import { noopActivityLogger } from "../infra/activity-logger.js";
 import { createLogger } from "../infra/logger.js";
 import type { BudgetEnforcer } from "../sessions/budget.js";
 import type { AIProvider } from "./providers.js";
@@ -37,17 +39,19 @@ export class AgentRuntime {
   private readonly config: AgentRuntimeConfig;
   private readonly logger: Logger<unknown>;
   private readonly budgetEnforcer?: BudgetEnforcer;
+  private readonly activityLogger: IActivityLogger;
 
   constructor(
     provider: AIProvider,
     config: AgentRuntimeConfig,
-    options?: { tools?: ToolRegistry; logger?: Logger<unknown>; budgetEnforcer?: BudgetEnforcer },
+    options?: { tools?: ToolRegistry; logger?: Logger<unknown>; budgetEnforcer?: BudgetEnforcer; activityLogger?: IActivityLogger },
   ) {
     this.provider = provider;
     this.config = config;
     this.tools = options?.tools ?? new ToolRegistry();
     this.logger = options?.logger ?? createLogger("agent-runtime");
     this.budgetEnforcer = options?.budgetEnforcer;
+    this.activityLogger = options?.activityLogger ?? noopActivityLogger;
   }
 
   /**
@@ -83,6 +87,7 @@ export class AgentRuntime {
     });
 
     const availableTools = this.tools.list();
+    const toolsUsed: string[] = [];
 
     let round = 0;
     while (round < maxRounds) {
@@ -98,6 +103,7 @@ export class AgentRuntime {
 
       this.logger.debug(`Completion round ${round}, model: ${model}`);
 
+      const providerStart = Date.now();
       let response: CompletionResponse;
 
       // Use streaming when callback is provided and provider supports it
@@ -119,6 +125,21 @@ export class AgentRuntime {
         response = await this.provider.complete(completionRequest);
       }
 
+      const providerDurationMs = Date.now() - providerStart;
+      const toolCallCount = response.message.toolCalls?.length ?? 0;
+
+      this.activityLogger.logProvider({
+        sessionId: request.sessionId,
+        model,
+        round,
+        promptTokens: response.usage?.promptTokens,
+        completionTokens: response.usage?.completionTokens,
+        totalTokens: response.usage?.totalTokens,
+        finishReason: response.finishReason,
+        durationMs: providerDurationMs,
+        toolCallCount,
+      });
+
       messages.push(response.message);
 
       // If the AI wants to call tools, execute them and loop
@@ -131,8 +152,16 @@ export class AgentRuntime {
           `Tool calls requested: ${response.message.toolCalls.map((tc) => tc.name).join(", ")}`,
         );
 
+        // Collect unique tool names
+        for (const tc of response.message.toolCalls) {
+          if (!toolsUsed.includes(tc.name)) {
+            toolsUsed.push(tc.name);
+          }
+        }
+
         const results = await this.tools.executeAll(
           response.message.toolCalls,
+          request.sessionId,
         );
 
         // Add tool results to the conversation
@@ -163,6 +192,7 @@ export class AgentRuntime {
           timestamp: Date.now(),
         },
         usage: response.usage,
+        toolsUsed: toolsUsed.length > 0 ? toolsUsed : undefined,
       };
     }
 
@@ -181,6 +211,7 @@ export class AgentRuntime {
     return {
       sessionId: request.sessionId,
       message: fallbackMessage,
+      toolsUsed: toolsUsed.length > 0 ? toolsUsed : undefined,
     };
   }
 

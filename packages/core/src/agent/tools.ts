@@ -1,3 +1,5 @@
+import type { IActivityLogger } from "../infra/activity-logger.js";
+import { noopActivityLogger } from "../infra/activity-logger.js";
 import type { AgentTool, ToolCall, ToolResult } from "./types.js";
 import type { ToolPolicyEngine } from "./tool-policy.js";
 
@@ -10,6 +12,12 @@ import type { ToolPolicyEngine } from "./tool-policy.js";
 export class ToolRegistry {
   private readonly tools = new Map<string, AgentTool>();
   private policyEngine: ToolPolicyEngine | null = null;
+  private activityLogger: IActivityLogger = noopActivityLogger;
+
+  /** Set the activity logger for tool execution tracking. */
+  setActivityLogger(logger: IActivityLogger): void {
+    this.activityLogger = logger;
+  }
 
   register(tool: AgentTool): void {
     if (this.tools.has(tool.name)) {
@@ -51,7 +59,7 @@ export class ToolRegistry {
    * error results rather than throwing. Applies tool policy checks
    * before execution if a policy engine is set.
    */
-  async execute(toolCall: ToolCall): Promise<ToolResult> {
+  async execute(toolCall: ToolCall, sessionId?: string): Promise<ToolResult> {
     const tool = this.tools.get(toolCall.name);
     if (!tool) {
       return {
@@ -84,11 +92,28 @@ export class ToolRegistry {
       }
     }
 
+    const startTime = Date.now();
     try {
       const result = await tool.execute(args);
+      this.activityLogger.logTool({
+        sessionId,
+        toolName: toolCall.name,
+        args,
+        result: result.substring(0, 1000),
+        isError: false,
+        durationMs: Date.now() - startTime,
+      });
       return { toolCallId: toolCall.id, content: result };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      this.activityLogger.logTool({
+        sessionId,
+        toolName: toolCall.name,
+        args,
+        result: message.substring(0, 1000),
+        isError: true,
+        durationMs: Date.now() - startTime,
+      });
       return {
         toolCallId: toolCall.id,
         content: `Tool execution error: ${message}`,
@@ -100,7 +125,7 @@ export class ToolRegistry {
   /**
    * Execute multiple tool calls in parallel.
    */
-  async executeAll(toolCalls: ToolCall[]): Promise<ToolResult[]> {
-    return Promise.all(toolCalls.map((tc) => this.execute(tc)));
+  async executeAll(toolCalls: ToolCall[], sessionId?: string): Promise<ToolResult[]> {
+    return Promise.all(toolCalls.map((tc) => this.execute(tc, sessionId)));
   }
 }

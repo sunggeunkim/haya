@@ -50,6 +50,7 @@ export interface ChatResponse {
   sessionId: string;
   message: Message;
   usage?: TokenUsage;
+  toolsUsed?: string[];
 }
 
 export interface ChatChunkEvent {
