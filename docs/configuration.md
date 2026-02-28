@@ -84,6 +84,7 @@ Configuration for the AI agent and model provider.
 | `agent.workspace` | `string` | *(optional)* | Path to a workspace directory. When set, file-based tools operate relative to this directory. |
 | `agent.providers` | `ProviderEntry[]` | *(optional)* | Fallback chain of providers. When specified, Haya will try each provider in order if the previous one fails (see below). |
 | `agent.toolPolicies` | `ToolPolicy[]` | `[]` | Array of per-tool access policies (see below). |
+| `agent.specialists` | `Specialist[]` | `[]` | Array of specialist agent definitions for multi-agent delegation (see below). |
 | `agent.maxContextTokens` | `number` (integer, >= 1000) | *(optional)* | Maximum context window size in tokens. When set, Haya will truncate conversation history to fit within this limit. |
 
 ### agent.providers (Fallback Chain)
@@ -105,6 +106,50 @@ Each entry defines an access policy for a specific tool.
 |-------|------|---------|-------------|
 | `toolName` | `string` | *(required)* | Name of the tool this policy applies to. |
 | `level` | `"allow" \| "confirm" \| "deny"` | *(required)* | Access level. `"allow"` permits the tool unconditionally. `"confirm"` requires user confirmation before execution. `"deny"` blocks the tool entirely. |
+
+### agent.specialists (Multi-Agent Delegation)
+
+Each entry defines a specialist agent that the main agent can delegate subtasks to via the `delegate_task` tool. When specialists are configured, the main agent receives a `delegate_task` tool that it can use to fan out work to specialists. The LLM can call `delegate_task` multiple times in a single round to delegate to multiple specialists in parallel.
+
+Specialists do **not** receive the `delegate_task` tool themselves, preventing infinite delegation chains. Each specialist gets its own `AgentRuntime` with a filtered set of tools (only tools listed in its `tools` array).
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | `string` | *(required)* | Unique name identifying the specialist (used by the main agent to select it). |
+| `description` | `string` | *(required)* | Human-readable description of what the specialist does. Shown to the main LLM to help it choose the right specialist. |
+| `systemPrompt` | `string` | *(required)* | System prompt for the specialist agent. |
+| `model` | `string` | *(optional)* | Model override for this specialist. Defaults to `agent.defaultModel`. |
+| `tools` | `string[]` | *(optional)* | Allowlist of tool names this specialist can use. Only tools already registered on the main runtime are available. If omitted, the specialist gets no tools. |
+
+**Example:**
+
+```json5
+{
+  agent: {
+    specialists: [
+      {
+        name: "researcher",
+        description: "Deep web research and information gathering",
+        systemPrompt: "You are a research specialist. Search the web thoroughly and provide comprehensive, well-sourced answers.",
+        tools: ["web_search", "web_fetch", "link_preview"],
+      },
+      {
+        name: "coder",
+        description: "Code writing, analysis, and file operations",
+        systemPrompt: "You are a coding specialist. Write clean, efficient code.",
+        tools: ["file_read", "file_write", "file_list", "shell_exec"],
+      },
+      {
+        name: "scheduler",
+        description: "Calendar management and reminders",
+        systemPrompt: "You are a scheduling specialist.",
+        model: "gpt-4o-mini",
+        tools: ["google_calendar_list", "google_calendar_create", "reminder_set", "reminder_list"],
+      },
+    ],
+  },
+}
+```
 
 ---
 
@@ -165,8 +210,34 @@ An array of scheduled jobs. Each job triggers an action on a cron schedule.
 |-------|------|---------|-------------|
 | `cron[].name` | `string` | *(required)* | Human-readable name for the job. |
 | `cron[].schedule` | `string` | *(required)* | Cron expression defining the schedule (e.g., `"0 3 * * *"` for daily at 3 AM). |
-| `cron[].action` | `string` | *(required)* | The action to execute. Built-in actions include `"prune_sessions"`. |
+| `cron[].action` | `string` | *(required)* | The action to execute. Built-in actions: `"prune_sessions"`, `"send_reminder"`, `"agent_prompt"`. |
 | `cron[].enabled` | `boolean` | `true` | Whether this job is active. Set to `false` to disable without removing. |
+| `cron[].metadata` | `Record<string, unknown>` | *(optional)* | Action-specific metadata. See action details below. |
+
+### Cron Actions
+
+#### `prune_sessions`
+
+Prunes old session files based on `sessions.pruning` settings. No metadata required.
+
+#### `send_reminder`
+
+Delivers a static reminder message to all connected channels. One-shot: the job is removed after firing.
+
+| Metadata field | Type | Description |
+|----------------|------|-------------|
+| `metadata.message` | `string` | The reminder text to deliver. |
+
+#### `agent_prompt`
+
+Runs a prompt through the AI agent on a schedule and delivers the response to all connected channels. Useful for morning briefings, recurring summaries, and proactive agent tasks. The job is **not** auto-removed — it fires on every schedule tick.
+
+| Metadata field | Type | Description |
+|----------------|------|-------------|
+| `metadata.prompt` | `string` | *(required)* The prompt to send to the agent. |
+| `metadata.model` | `string` | *(optional)* Model override for this job (e.g., `"gpt-4o"`). Defaults to `agent.defaultModel`. |
+
+Each `agent_prompt` job gets its own session (`cron-<jobId>`), so conversation history is preserved across runs — the agent can reference previous responses.
 
 ---
 
@@ -215,6 +286,30 @@ Configuration for built-in tool integrations.
 | `tools.google.calendar.enabled` | `boolean` | `false` | Enable Google Calendar tools (list events, create events). |
 | `tools.google.gmail.enabled` | `boolean` | `false` | Enable Gmail tools (read and compose emails). |
 | `tools.google.drive.enabled` | `boolean` | `false` | Enable Google Drive tools (read and manage files). |
+
+### tools.youtube
+
+YouTube Data API v3 integration for searching videos, retrieving video details, and listing captions.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `tools.youtube.apiKeyEnvVar` | `string` | *(required)* | Name of the environment variable containing the YouTube Data API v3 key. |
+
+**Setup:**
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2. Create a project (or select an existing one).
+3. Enable the **YouTube Data API v3** under APIs & Services > Library.
+4. Create an API key under APIs & Services > Credentials.
+5. Add the key to your `.env` file: `YOUTUBE_API_KEY=your-key-here`
+
+**Tools provided:**
+
+| Tool | Description | Default Policy |
+|------|-------------|----------------|
+| `youtube_search` | Search videos by keyword with sorting options (relevance, date, viewCount, rating). Returns titles, channels, dates, URLs, and descriptions. | `allow` |
+| `youtube_video_details` | Get full metadata for a video by ID: title, channel, date, duration, view/like/comment counts, quality, captions availability, tags, and description. | `allow` |
+| `youtube_captions` | List available caption tracks for a video (language, name, track kind). Note: caption download requires OAuth. | `allow` |
 
 ---
 
@@ -350,6 +445,15 @@ A comprehensive configuration using JSON5 syntax with most features enabled:
       action: "prune_sessions",
       enabled: true,
     },
+    {
+      name: "morning-briefing",
+      schedule: "0 7 * * *",
+      action: "agent_prompt",
+      metadata: {
+        prompt: "Summarize today's weather, my calendar events, and top emails.",
+        model: "gpt-4o",
+      },
+    },
   ],
 
   // Plugins
@@ -371,6 +475,9 @@ A comprehensive configuration using JSON5 syntax with most features enabled:
       calendar: { enabled: true },
       gmail: { enabled: true },
       drive: { enabled: false },
+    },
+    youtube: {
+      apiKeyEnvVar: "YOUTUBE_API_KEY",
     },
   },
 
