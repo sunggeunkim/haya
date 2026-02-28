@@ -10,15 +10,20 @@ export interface Session {
 }
 
 export interface SessionEntry {
-  type: "message" | "meta";
+  type: "message" | "meta" | "compaction";
   timestamp: number;
-  data: Message | SessionMeta;
+  data: Message | SessionMeta | CompactionMeta;
 }
 
 export interface SessionMeta {
   title?: string;
   model?: string;
   createdAt: number;
+}
+
+export interface CompactionMeta {
+  summary: string;
+  droppedMessageCount: number;
 }
 
 export interface SessionListItem {

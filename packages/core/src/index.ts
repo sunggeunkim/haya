@@ -15,6 +15,8 @@ export {
   FlightProviderSchema,
   FlightConfigSchema,
   TodoistConfigSchema,
+  ContextPruningSchema,
+  CompactionSchema,
 } from "./config/schema.js";
 export type {
   AssistantConfig,
@@ -199,6 +201,31 @@ export { createQrTools } from "./agent/qr-tools.js";
 export { createTodoistTools } from "./agent/todoist-tools.js";
 export type { TodoistConfig } from "./agent/todoist-tools.js";
 export { createProfileTools } from "./agent/profile-tools.js";
+export { compactHistory, compactHistoryWithSummary } from "./agent/compaction.js";
+export type { CompactionOptions, CompactionResult } from "./agent/compaction.js";
+export { pruneToolResults, DEFAULT_CONTEXT_PRUNING_SETTINGS } from "./agent/context-pruning.js";
+export type { ContextPruningSettings } from "./agent/context-pruning.js";
+export {
+  resolveContextWindow,
+  evaluateContextWindowGuard,
+  CONTEXT_WINDOW_HARD_MIN_TOKENS,
+  CONTEXT_WINDOW_WARN_BELOW_TOKENS,
+} from "./agent/context-window-guard.js";
+export type {
+  ContextWindowInfo,
+  ContextWindowGuardResult,
+  ContextWindowSource,
+} from "./agent/context-window-guard.js";
+export { summarizeMessages, chunkMessagesByMaxTokens } from "./agent/summarizer.js";
+export type { SummarizerConfig } from "./agent/summarizer.js";
+export {
+  shouldRunMemoryFlush,
+  estimateSessionTokens,
+  buildMemoryFlushMessages,
+  DEFAULT_MEMORY_FLUSH_PROMPT,
+  DEFAULT_MEMORY_FLUSH_SYSTEM_PROMPT,
+} from "./agent/memory-flush.js";
+export type { MemoryFlushSettings, MemoryFlushParams } from "./agent/memory-flush.js";
 
 // Google OAuth
 export { GoogleAuth, callGoogleApi, callGoogleApiText } from "./google/auth.js";
@@ -210,11 +237,13 @@ export { SenderProfileStore } from "./sessions/profile-store.js";
 export { HistoryManager } from "./sessions/history.js";
 export { UsageTracker } from "./sessions/usage.js";
 export type { UsageRecord } from "./sessions/usage.js";
+export type { GetHistoryOptions } from "./sessions/history.js";
 export type {
   Session,
   SessionEntry,
   SessionListItem,
   SessionMeta,
+  CompactionMeta,
 } from "./sessions/types.js";
 
 // Gateway server methods

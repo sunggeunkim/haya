@@ -1,4 +1,6 @@
 import { z } from "zod";
+import type { ContextPruningSettings } from "../../agent/context-pruning.js";
+import type { SummarizerConfig } from "../../agent/summarizer.js";
 import type { AgentRuntime } from "../../agent/runtime.js";
 import type { HistoryManager } from "../../sessions/history.js";
 import type { ClientEventSender, MethodHandler } from "../server-ws.js";
@@ -18,11 +20,25 @@ const ChatSendParamsSchema = z.object({
 export function createChatSendHandler(
   runtime: AgentRuntime,
   history: HistoryManager,
+  options?: {
+    maxContextTokens?: number;
+    systemPromptTokens?: number;
+    contextPruning?: ContextPruningSettings;
+    summarizer?: SummarizerConfig;
+  },
 ): MethodHandler {
   return async (params, _clientId, send) => {
     const parsed = ChatSendParamsSchema.parse(params);
 
-    const sessionHistory = history.getHistory(parsed.sessionId);
+    const historyOpts = {
+      maxTokens: options?.maxContextTokens,
+      systemPromptTokens: options?.systemPromptTokens,
+      contextPruning: options?.contextPruning,
+      summarizer: options?.summarizer,
+    };
+    const sessionHistory = options?.summarizer
+      ? await history.getHistoryAsync(parsed.sessionId, historyOpts)
+      : history.getHistory(parsed.sessionId, historyOpts);
 
     const onChunk = send
       ? (chunk: { sessionId: string; delta: string; done: boolean }) => {

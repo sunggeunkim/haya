@@ -22,6 +22,7 @@ function createTestConfig(portOverride = 0): AssistantConfig {
       defaultModel: "gpt-4o",
       systemPrompt: "You are a test assistant.",
       maxHistoryMessages: 10,
+      maxContextTokens: 128_000,
       toolPolicies: [],
       specialists: [],
     },

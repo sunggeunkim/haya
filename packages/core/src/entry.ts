@@ -556,6 +556,77 @@ program
         config.agent.maxHistoryMessages,
       );
 
+      // Estimate system prompt tokens once at startup for context budgeting
+      const { createSimpleTokenCounter } = await import("./agent/token-counter.js");
+      const tokenCounter = createSimpleTokenCounter();
+      const baseSystemPromptTokens = tokenCounter.count(config.agent.systemPrompt);
+
+      // Context window guard
+      const { resolveContextWindow, evaluateContextWindowGuard } = await import("./agent/context-window-guard.js");
+      const ctxWindowInfo = resolveContextWindow(config.agent.maxContextTokens);
+      const ctxGuard = evaluateContextWindowGuard({ info: ctxWindowInfo });
+      if (ctxGuard.shouldBlock) {
+        throw new (await import("./infra/errors.js")).ConfigError(
+          `Context window too small: ${ctxGuard.tokens} tokens (minimum: 16,000). ` +
+          `Increase agent.maxContextTokens in your config.`,
+        );
+      }
+      if (ctxGuard.shouldWarn) {
+        log.warn(
+          `Context window is small: ${ctxGuard.tokens} tokens (source: ${ctxGuard.source}). ` +
+          `Consider increasing agent.maxContextTokens for better performance.`,
+        );
+      }
+
+      // Resolve context pruning settings (if enabled)
+      const contextPruningSettings = await (async () => {
+        const cp = config.agent.contextPruning;
+        if (!cp?.enabled) return undefined;
+        const { DEFAULT_CONTEXT_PRUNING_SETTINGS } = await import("./agent/context-pruning.js");
+        return {
+          ...DEFAULT_CONTEXT_PRUNING_SETTINGS,
+          ...cp,
+          softTrim: { ...DEFAULT_CONTEXT_PRUNING_SETTINGS.softTrim, ...cp.softTrim },
+          hardClear: { ...DEFAULT_CONTEXT_PRUNING_SETTINGS.hardClear, ...cp.hardClear },
+        };
+      })();
+
+      // Build summarizer config (if compaction mode is "summarize")
+      const summarizerConfig = (() => {
+        const compaction = config.agent.compaction;
+        if (compaction?.mode !== "summarize") return undefined;
+        return {
+          complete: async (msgs: import("./agent/types.js").Message[]) => {
+            const resp = await provider.complete({
+              model: compaction.model ?? config.agent.defaultModel,
+              messages: msgs,
+              maxTokens: compaction.reserveTokens ?? 2048,
+            });
+            return resp.message.content;
+          },
+          model: compaction.model ?? config.agent.defaultModel,
+          reserveTokens: compaction.reserveTokens ?? 2048,
+        };
+      })();
+
+      // Memory flush settings (only when memory is enabled)
+      const memoryFlushSettings = await (async () => {
+        if (!config.memory?.enabled) return null;
+        const mf = config.agent.compaction?.memoryFlush;
+        if (mf && !mf.enabled) return null;
+        const { shouldRunMemoryFlush, estimateSessionTokens, buildMemoryFlushMessages } =
+          await import("./agent/memory-flush.js");
+        return {
+          softThresholdTokens: mf?.softThresholdTokens ?? 4000,
+          shouldRunMemoryFlush,
+          estimateSessionTokens,
+          buildMemoryFlushMessages,
+        };
+      })();
+
+      // Track memory flush state per session
+      const memoryFlushState = new Map<string, boolean>();
+
       // Initialize usage tracker
       const usageTracker = new UsageTracker("data");
 
@@ -662,7 +733,43 @@ program
           systemPromptOverride = `${basePrompt}\n\n${profileText}`;
         }
 
-        const history = historyManager.getHistory(sessionKey);
+        // Pre-compaction memory flush (if enabled and near context limit)
+        if (memoryFlushSettings) {
+          const rawMessages = historyManager.getHistory(sessionKey);
+          const sessionTokens = memoryFlushSettings.estimateSessionTokens(rawMessages, tokenCounter);
+          const hasRun = memoryFlushState.get(sessionKey) ?? false;
+          if (memoryFlushSettings.shouldRunMemoryFlush({
+            totalTokens: sessionTokens,
+            contextWindowTokens: config.agent.maxContextTokens,
+            reserveTokens: config.agent.compaction?.reserveTokens ?? 4096,
+            softThresholdTokens: memoryFlushSettings.softThresholdTokens,
+            hasRunForCycle: hasRun,
+          })) {
+            log.info(`Running pre-compaction memory flush for session ${sessionKey}`);
+            const flushMessages = memoryFlushSettings.buildMemoryFlushMessages();
+            try {
+              await agentRuntime.chat(
+                { sessionId: sessionKey, message: flushMessages[1].content },
+                rawMessages,
+              );
+              memoryFlushState.set(sessionKey, true);
+            } catch (err) {
+              log.warn(`Memory flush failed for session ${sessionKey}: ${err instanceof Error ? err.message : String(err)}`);
+            }
+          }
+        }
+
+        const historyOptions = {
+          maxTokens: config.agent.maxContextTokens,
+          systemPromptTokens: systemPromptOverride
+            ? tokenCounter.count(systemPromptOverride)
+            : baseSystemPromptTokens,
+          contextPruning: contextPruningSettings,
+          summarizer: summarizerConfig,
+        };
+        const history = summarizerConfig
+          ? await historyManager.getHistoryAsync(sessionKey, historyOptions)
+          : historyManager.getHistory(sessionKey, historyOptions);
         const response = await agentRuntime.chat(
           {
             sessionId: sessionKey,
@@ -776,7 +883,15 @@ program
 
           const sessionKey = `cron-${job.id}`;
           const cronChatStart = Date.now();
-          const history = historyManager.getHistory(sessionKey);
+          const cronHistoryOpts = {
+            maxTokens: config.agent.maxContextTokens,
+            systemPromptTokens: baseSystemPromptTokens,
+            contextPruning: contextPruningSettings,
+            summarizer: summarizerConfig,
+          };
+          const history = summarizerConfig
+            ? await historyManager.getHistoryAsync(sessionKey, cronHistoryOpts)
+            : historyManager.getHistory(sessionKey, cronHistoryOpts);
 
           // Optional model override
           const modelOverride = meta.model as string | undefined;
@@ -839,7 +954,12 @@ program
         const { createChannelsListHandler, createChannelsStartHandler, createChannelsStopHandler } = await import("./gateway/server-methods/channels.js");
         const { createCronListHandler, createCronStatusHandler, createCronAddHandler, createCronRemoveHandler } = await import("./gateway/server-methods/cron.js");
 
-        methods.set("chat.send", createChatSendHandler(agentRuntime, historyManager));
+        methods.set("chat.send", createChatSendHandler(agentRuntime, historyManager, {
+          maxContextTokens: config.agent.maxContextTokens,
+          systemPromptTokens: baseSystemPromptTokens,
+          contextPruning: contextPruningSettings,
+          summarizer: summarizerConfig,
+        }));
         methods.set("sessions.list", createSessionsListHandler(sessionStore));
         methods.set("sessions.create", createSessionsCreateHandler(sessionStore));
         methods.set("sessions.delete", createSessionsDeleteHandler(sessionStore));

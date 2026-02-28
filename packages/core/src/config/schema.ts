@@ -96,7 +96,7 @@ export const TwitterSearchConfigSchema = z.object({
 });
 
 export const FinanceProviderSchema = z.object({
-  provider: z.enum(["yahoo", "alphavantage", "twelvedata", "yfinance"]),
+  provider: z.enum(["yahoo", "alphavantage", "twelvedata", "yahoo_direct", "yfinance"]),
   apiKeyEnvVar: z.string().optional(),
 });
 
@@ -177,6 +177,33 @@ export const ObservabilitySchema = z.object({
   serviceName: z.string().default("haya"),
 });
 
+export const ContextPruningSchema = z.object({
+  enabled: z.boolean().default(false),
+  keepLastAssistants: z.number().int().min(0).default(3),
+  softTrimRatio: z.number().min(0).max(1).default(0.3),
+  hardClearRatio: z.number().min(0).max(1).default(0.5),
+  minPrunableToolChars: z.number().int().min(0).default(50_000),
+  softTrim: z.object({
+    maxChars: z.number().int().min(0).default(4_000),
+    headChars: z.number().int().min(0).default(1_500),
+    tailChars: z.number().int().min(0).default(1_500),
+  }).default({}),
+  hardClear: z.object({
+    enabled: z.boolean().default(true),
+    placeholder: z.string().default("[Old tool result content cleared]"),
+  }).default({}),
+});
+
+export const CompactionSchema = z.object({
+  mode: z.enum(["truncate", "summarize"]).default("truncate"),
+  model: z.string().optional(),
+  reserveTokens: z.number().int().min(100).default(2048),
+  memoryFlush: z.object({
+    enabled: z.boolean().default(true),
+    softThresholdTokens: z.number().int().min(0).default(4000),
+  }).optional(),
+});
+
 export const AssistantConfigSchema = z.object({
   configVersion: z.number().int().min(0).optional(),
   gateway: z.object({
@@ -202,7 +229,9 @@ export const AssistantConfigSchema = z.object({
     providers: z.array(ProviderEntrySchema).optional(),
     toolPolicies: z.array(ToolPolicySchema).default([]),
     specialists: z.array(SpecialistSchema).default([]),
-    maxContextTokens: z.number().int().min(1000).optional(),
+    maxContextTokens: z.number().int().min(1000).default(128_000),
+    contextPruning: ContextPruningSchema.optional(),
+    compaction: CompactionSchema.optional(),
   }),
   senderAuth: SenderAuthSchema.optional(),
   sessions: z.object({

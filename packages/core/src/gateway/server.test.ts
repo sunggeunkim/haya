@@ -19,6 +19,7 @@ function makeTestConfig(overrides?: Partial<AssistantConfig>): AssistantConfig {
       defaultProviderApiKeyEnvVar: "TEST_KEY",
       systemPrompt: "You are a test assistant.",
       maxHistoryMessages: 100,
+      maxContextTokens: 128_000,
       toolPolicies: [],
       specialists: [],
     },
