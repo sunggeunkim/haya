@@ -100,7 +100,7 @@ describe("todoist_tasks", () => {
 
     const callUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
       .calls[0][0] as string;
-    expect(callUrl).toContain("/rest/v2/tasks");
+    expect(callUrl).toContain("/api/v1/tasks");
   });
 
   it("lists tasks filtered by project_id", async () => {

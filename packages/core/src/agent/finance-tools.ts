@@ -1,5 +1,4 @@
 import { requireSecret } from "../config/secrets.js";
-import { safeExecSync } from "../security/command-exec.js";
 import type { BuiltinTool } from "./builtin-tools.js";
 
 const YAHOO_FINANCE_URL =
@@ -79,26 +78,32 @@ interface TwelveDataQuoteResponse {
   volume?: string;
 }
 
-/** JSON shape returned by the yfinance Python script. */
-interface YfinanceJsonOutput {
+/** Response shape from Yahoo Finance v8 chart API. */
+interface YahooChartMeta {
   symbol?: string;
   shortName?: string;
-  exchange?: string;
-  currentPrice?: number;
+  fullExchangeName?: string;
+  exchangeName?: string;
   regularMarketPrice?: number;
-  regularMarketChange?: number;
-  regularMarketChangePercent?: number;
-  regularMarketOpen?: number;
+  chartPreviousClose?: number;
+  previousClose?: number;
+  regularMarketVolume?: number;
   regularMarketDayHigh?: number;
   regularMarketDayLow?: number;
-  regularMarketPreviousClose?: number;
-  regularMarketVolume?: number;
-  marketCap?: number;
+}
+
+interface YahooChartResponse {
+  chart?: {
+    result?: Array<{
+      meta?: YahooChartMeta;
+    }>;
+    error?: { code?: string; description?: string } | null;
+  };
 }
 
 /** A single finance provider entry. */
 export interface FinanceProvider {
-  provider: "yahoo" | "alphavantage" | "twelvedata" | "yfinance";
+  provider: "yahoo" | "alphavantage" | "twelvedata" | "yahoo_direct" | "yfinance";
   apiKeyEnvVar?: string;
 }
 
@@ -252,62 +257,57 @@ async function executeTwelveDataQuote(
   };
 }
 
-/** Python script that fetches a quote via yfinance and prints JSON. */
-const YFINANCE_SCRIPT = `
-import json, sys
-try:
-    import yfinance
-except ImportError:
-    print(json.dumps({"error": "yfinance is not installed. Run: pip install yfinance"}))
-    sys.exit(0)
-t = yfinance.Ticker(sys.argv[1])
-info = t.info or {}
-fields = [
-    "symbol","shortName","exchange","currentPrice","regularMarketPrice",
-    "regularMarketChange","regularMarketChangePercent","regularMarketOpen",
-    "regularMarketDayHigh","regularMarketDayLow","regularMarketPreviousClose",
-    "regularMarketVolume","marketCap",
-]
-print(json.dumps({k: info.get(k) for k in fields}))
-`;
+const YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
 
-/** Execute a quote lookup via the yfinance Python library (free, no API key). */
-async function executeYfinanceQuote(symbol: string): Promise<StockQuote> {
-  let output: string;
-  try {
-    output = safeExecSync("python3", ["-c", YFINANCE_SCRIPT, symbol], {
-      timeout: REQUEST_TIMEOUT_MS,
-    });
-  } catch (err) {
+/** Execute a quote lookup via Yahoo Finance's public chart API (free, no API key). */
+async function executeYahooDirectQuote(symbol: string): Promise<StockQuote> {
+  const url = `${YAHOO_CHART_URL}/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
+
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0",
+    },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+
+  if (!response.ok) {
     throw new Error(
-      `yfinance execution failed: ${err instanceof Error ? err.message : String(err)}`,
+      `Yahoo Finance chart API HTTP ${response.status}: ${response.statusText}`,
     );
   }
 
-  const data = JSON.parse(output.trim()) as YfinanceJsonOutput & { error?: string };
+  const data = (await response.json()) as YahooChartResponse;
 
-  if (data.error) {
-    throw new Error(`yfinance error: ${data.error}`);
+  if (data.chart?.error) {
+    throw new Error(
+      `Yahoo Finance error: ${data.chart.error.description ?? data.chart.error.code ?? "Unknown"}`,
+    );
   }
 
-  const price = data.currentPrice ?? data.regularMarketPrice;
-  if (price == null) {
+  const meta = data.chart?.result?.[0]?.meta;
+  if (!meta || meta.regularMarketPrice == null) {
     throw new Error(`No quote data returned for symbol "${symbol}"`);
   }
 
+  const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? null;
+  const price = meta.regularMarketPrice;
+  const change = prevClose != null ? price - prevClose : null;
+  const changePercent =
+    change != null && prevClose ? (change / prevClose) * 100 : null;
+
   return {
-    symbol: data.symbol ?? symbol,
-    name: data.shortName ?? null,
-    exchange: data.exchange ?? null,
+    symbol: meta.symbol ?? symbol,
+    name: meta.shortName ?? null,
+    exchange: meta.fullExchangeName ?? meta.exchangeName ?? null,
     price,
-    change: data.regularMarketChange ?? null,
-    changePercent: data.regularMarketChangePercent ?? null,
-    open: data.regularMarketOpen ?? null,
-    high: data.regularMarketDayHigh ?? null,
-    low: data.regularMarketDayLow ?? null,
-    previousClose: data.regularMarketPreviousClose ?? null,
-    volume: data.regularMarketVolume ?? null,
-    marketCap: data.marketCap ?? null,
+    change,
+    changePercent,
+    open: null,
+    high: meta.regularMarketDayHigh ?? null,
+    low: meta.regularMarketDayLow ?? null,
+    previousClose: prevClose,
+    volume: meta.regularMarketVolume ?? null,
+    marketCap: null,
   };
 }
 
@@ -322,8 +322,8 @@ async function executeQuoteProvider(
   if (provider.provider === "twelvedata") {
     return executeTwelveDataQuote(symbol, provider.apiKeyEnvVar!);
   }
-  if (provider.provider === "yfinance") {
-    return executeYfinanceQuote(symbol);
+  if (provider.provider === "yfinance" || provider.provider === "yahoo_direct") {
+    return executeYahooDirectQuote(symbol);
   }
   return executeYahooQuote(symbol, provider.apiKeyEnvVar!);
 }

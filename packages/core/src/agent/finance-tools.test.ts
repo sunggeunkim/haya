@@ -5,9 +5,6 @@ vi.mock("../config/secrets.js", () => ({
   requireSecret: vi.fn().mockReturnValue("test-api-key"),
 }));
 
-vi.mock("../security/command-exec.js", () => ({
-  safeExecSync: vi.fn(),
-}));
 
 describe("createFinanceTools", () => {
   it("returns one tool named stock_quote", () => {
@@ -362,85 +359,116 @@ describe("stock_quote (twelvedata)", () => {
   });
 });
 
-describe("stock_quote (yfinance)", () => {
-  it("calls safeExecSync with python3 and the symbol", async () => {
-    const { safeExecSync } = await import("../security/command-exec.js");
-    (safeExecSync as ReturnType<typeof vi.fn>).mockReturnValue(
-      JSON.stringify({
+describe("stock_quote (yfinance / yahoo_direct)", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const chartResponse = (meta: unknown) => ({
+    ok: true,
+    json: vi.fn().mockResolvedValue({
+      chart: { result: [{ meta }], error: null },
+    }),
+  });
+
+  it("fetches quote from Yahoo Finance chart API", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      chartResponse({
         symbol: "AAPL",
         shortName: "Apple Inc.",
-        exchange: "NMS",
-        currentPrice: 178.72,
-        regularMarketChange: 2.34,
-        regularMarketChangePercent: 1.33,
-        regularMarketOpen: 176.5,
+        fullExchangeName: "NasdaqGS",
+        regularMarketPrice: 178.72,
+        chartPreviousClose: 176.38,
         regularMarketDayHigh: 179.1,
         regularMarketDayLow: 176.2,
-        regularMarketPreviousClose: 176.38,
         regularMarketVolume: 54321000,
-        marketCap: 2800000000000,
       }),
     );
 
     const tools = createFinanceTools([{ provider: "yfinance" }]);
     const result = await tools[0].execute({ symbol: "AAPL" });
 
-    expect(safeExecSync).toHaveBeenCalledWith(
-      "python3",
-      ["-c", expect.stringContaining("yfinance"), "AAPL"],
-      expect.objectContaining({ timeout: expect.any(Number) }),
-    );
+    const callUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string;
+    expect(callUrl).toContain("query1.finance.yahoo.com");
+    expect(callUrl).toContain("/AAPL");
 
     expect(result).toContain("Stock Quote: AAPL");
     expect(result).toContain("Name: Apple Inc.");
+    expect(result).toContain("Exchange: NasdaqGS");
     expect(result).toContain("Price: 178.72");
-    expect(result).toContain("+2.34");
     expect(result).toContain("Volume: 54,321,000");
-    expect(result).toContain("Market Cap: $2.80T");
   });
 
-  it("uses regularMarketPrice when currentPrice is absent", async () => {
-    const { safeExecSync } = await import("../security/command-exec.js");
-    (safeExecSync as ReturnType<typeof vi.fn>).mockReturnValue(
-      JSON.stringify({
+  it("also works with yahoo_direct provider name", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      chartResponse({
         symbol: "MSFT",
         regularMarketPrice: 400.5,
+        chartPreviousClose: 398.0,
       }),
     );
 
-    const tools = createFinanceTools([{ provider: "yfinance" }]);
+    const tools = createFinanceTools([{ provider: "yahoo_direct" }]);
     const result = await tools[0].execute({ symbol: "MSFT" });
     expect(result).toContain("Price: 400.50");
   });
 
-  it("throws when yfinance is not installed", async () => {
-    const { safeExecSync } = await import("../security/command-exec.js");
-    (safeExecSync as ReturnType<typeof vi.fn>).mockReturnValue(
-      JSON.stringify({ error: "yfinance is not installed. Run: pip install yfinance" }),
+  it("computes change and changePercent from previousClose", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      chartResponse({
+        symbol: "AAPL",
+        regularMarketPrice: 180,
+        chartPreviousClose: 170,
+      }),
     );
 
     const tools = createFinanceTools([{ provider: "yfinance" }]);
-    await expect(tools[0].execute({ symbol: "AAPL" })).rejects.toThrow(
-      "yfinance error: yfinance is not installed",
-    );
+    const result = await tools[0].execute({ symbol: "AAPL" });
+
+    expect(result).toContain("+10.00");
+    expect(result).toContain("+5.88%");
   });
 
-  it("throws when python3 execution fails", async () => {
-    const { safeExecSync } = await import("../security/command-exec.js");
-    (safeExecSync as ReturnType<typeof vi.fn>).mockImplementation(() => {
-      throw new Error("spawn python3 ENOENT");
+  it("throws on API error", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      status: 404,
+      statusText: "Not Found",
     });
 
     const tools = createFinanceTools([{ provider: "yfinance" }]);
-    await expect(tools[0].execute({ symbol: "AAPL" })).rejects.toThrow(
-      "yfinance execution failed",
+    await expect(tools[0].execute({ symbol: "INVALID" })).rejects.toThrow(
+      "Yahoo Finance chart API HTTP 404",
     );
   });
 
-  it("throws on empty response (no price data)", async () => {
-    const { safeExecSync } = await import("../security/command-exec.js");
-    (safeExecSync as ReturnType<typeof vi.fn>).mockReturnValue(
-      JSON.stringify({ symbol: "XYZ" }),
+  it("throws on chart error response", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        chart: {
+          result: null,
+          error: { code: "Not Found", description: "No data found for symbol XYZ" },
+        },
+      }),
+    });
+
+    const tools = createFinanceTools([{ provider: "yfinance" }]);
+    await expect(tools[0].execute({ symbol: "XYZ" })).rejects.toThrow(
+      "Yahoo Finance error: No data found for symbol XYZ",
+    );
+  });
+
+  it("throws on empty result (no price data)", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      chartResponse({ symbol: "XYZ" }),
     );
 
     const tools = createFinanceTools([{ provider: "yfinance" }]);

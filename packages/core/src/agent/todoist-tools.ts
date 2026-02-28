@@ -1,7 +1,7 @@
 import { requireSecret } from "../config/secrets.js";
 import type { BuiltinTool } from "./builtin-tools.js";
 
-const TODOIST_API_URL = "https://api.todoist.com/rest/v2";
+const TODOIST_API_URL = "https://api.todoist.com/api/v1";
 const REQUEST_TIMEOUT_MS = 10_000;
 
 /** Configuration for Todoist integration. */
@@ -9,7 +9,7 @@ export interface TodoistConfig {
   apiKeyEnvVar: string;
 }
 
-/** Shared helper to call the Todoist REST API v2. */
+/** Shared helper to call the Todoist API v1. */
 async function callTodoistApi(
   apiKeyEnvVar: string,
   method: string,
